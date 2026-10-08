@@ -1,0 +1,395 @@
+// Prisma schema ánh xạ 1-1 với database/01_schema.sql (22 bảng, PostgreSQL).
+// Lưu ý: Postgres tự chuyển các định danh không có ngoặc kép thành chữ thường,
+// nên mọi model/field đều dùng @@map/@map sang tên chữ thường.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ 1-3. TÀI KHOẢN & PHÂN QUYỀN ============
+model TaiKhoan {
+  TaiKhoanID      Int         @id @default(autoincrement()) @map("taikhoanid")
+  Email           String      @unique @map("email") @db.VarChar(100)
+  MatKhauHash     String      @map("matkhauhash") @db.VarChar(255)
+  SoDienThoai     String?     @unique @map("sodienthoai") @db.VarChar(20)
+  TrangThai       Int         @default(1) @map("trangthai") @db.SmallInt
+  NgayTao         DateTime    @default(now()) @map("ngaytao") @db.Timestamp(6)
+  emailVerifiedAt DateTime?   @map("email_verified_at") @db.Timestamp(6)
+  rememberToken   String?     @map("remember_token") @db.VarChar(100)
+  PhanQuyen       PhanQuyen[]
+  KhachHang       KhachHang?
+  NhanVien        NhanVien?
+
+  @@map("taikhoan")
+}
+
+model VaiTro {
+  VaiTroID  Int         @id @default(autoincrement()) @map("vaitroid")
+  TenVaiTro String      @unique @map("tenvaitro") @db.VarChar(50)
+  MoTa      String?     @map("mota") @db.VarChar(255)
+  PhanQuyen PhanQuyen[]
+
+  @@map("vaitro")
+}
+
+model PhanQuyen {
+  TaiKhoanID Int      @map("taikhoanid")
+  VaiTroID   Int      @map("vaitroid")
+  NgayGan    DateTime @default(now()) @map("ngaygan") @db.Timestamp(6)
+  TaiKhoan   TaiKhoan @relation(fields: [TaiKhoanID], references: [TaiKhoanID], onDelete: Cascade)
+  VaiTro     VaiTro   @relation(fields: [VaiTroID], references: [VaiTroID], onDelete: Cascade)
+
+  @@id([TaiKhoanID, VaiTroID])
+  @@map("phanquyen")
+}
+
+// ============ 4-6. KHÁCH HÀNG, NHÂN VIÊN, HDV ============
+model KhachHang {
+  KhachHangID    Int          @id @default(autoincrement()) @map("khachhangid")
+  TaiKhoanID     Int          @unique @map("taikhoanid")
+  HoTen          String       @map("hoten") @db.VarChar(100)
+  DiaChiGiaoHang String?      @map("diachigiaohang") @db.VarChar(255)
+  SoDienThoai    String       @map("sodienthoai") @db.VarChar(20)
+  Email          String       @map("email") @db.VarChar(100)
+  CCCD           String?      @map("cccd") @db.VarChar(12)
+  NgaySinh       DateTime?    @map("ngaysinh") @db.Date
+  GioiTinh       String?      @map("gioitinh") @db.VarChar(10)
+  TaiKhoan       TaiKhoan     @relation(fields: [TaiKhoanID], references: [TaiKhoanID], onDelete: Cascade)
+  DonDatTour     DonDatTour[]
+  DanhGia        DanhGia[]
+
+  @@map("khachhang")
+}
+
+model NhanVien {
+  NhanVienID      Int               @id @default(autoincrement()) @map("nhanvienid")
+  TaiKhoanID      Int               @unique @map("taikhoanid")
+  HoTen           String            @map("hoten") @db.VarChar(100)
+  DiaChi          String?           @map("diachi") @db.VarChar(255)
+  SoDienThoai     String            @map("sodienthoai") @db.VarChar(20)
+  Email           String            @map("email") @db.VarChar(100)
+  ChucVu          String            @map("chucvu") @db.VarChar(50)
+  NgayVaoLam      DateTime?         @map("ngayvaolam") @db.Date
+  TaiKhoan        TaiKhoan          @relation(fields: [TaiKhoanID], references: [TaiKhoanID], onDelete: Cascade)
+  HuongDanVien    HuongDanVien?
+  ToursTao        Tour[]
+  DonXuLy         DonDatTour[]
+  ThanhToan       ThanhToan[]
+  PhieuDatDichVu  PhieuDatDichVu[]
+  DieuPhoiTour    DieuPhoiTour[]
+  BaoCaoQuyetToan BaoCaoQuyetToan[]
+
+  @@map("nhanvien")
+}
+
+model HuongDanVien {
+  HDVID        Int            @id @default(autoincrement()) @map("hdvid")
+  NhanVienID   Int            @unique @map("nhanvienid")
+  SoTheHDV     String         @unique @map("sothehdv") @db.VarChar(50)
+  NgonNgu      String         @map("ngonngu") @db.VarChar(100)
+  KinhNghiem   String?        @map("kinhnghiem") @db.VarChar(100)
+  TrangThai    String         @default("San sang") @map("trangthai") @db.VarChar(30)
+  NhanVien     NhanVien       @relation(fields: [NhanVienID], references: [NhanVienID], onDelete: Cascade)
+  DieuPhoiTour DieuPhoiTour[]
+
+  @@map("huongdanvien")
+}
+
+// ============ 7-9. TOUR & LỊCH KHỞI HÀNH ============
+model DanhMucTour {
+  DanhMucID  Int     @id @default(autoincrement()) @map("danhmucid")
+  TenDanhMuc String  @unique @map("tendanhmuc") @db.VarChar(100)
+  MoTa       String? @map("mota")
+  Tour       Tour[]
+
+  @@map("danhmuctour")
+}
+
+model Tour {
+  TourID          Int               @id @default(autoincrement()) @map("tourid")
+  DanhMucID       Int               @map("danhmucid")
+  NhanVienTaoID   Int               @map("nhanvientaoid")
+  MaTour          String            @unique @map("matour") @db.VarChar(20)
+  TenTour         String            @map("tentour") @db.VarChar(255)
+  ThoiGian        String            @map("thoigian") @db.VarChar(50)
+  DiemKhoiHanh    String            @map("diemkhoihanh") @db.VarChar(100)
+  DiemDen         String            @map("diemden") @db.VarChar(100)
+  MoTaChiTiet     String?           @map("motachitiet")
+  LichTrinh       String?           @map("lichtrinh")
+  PhongCachTour   String?           @map("phongcachtour") @db.VarChar(50)
+  PhuongTien      String?           @map("phuongtien") @db.VarChar(100)
+  GiaNguoiLon     Decimal           @map("gianguoilon") @db.Decimal(15, 2)
+  GiaTreEm        Decimal           @map("giatreem") @db.Decimal(15, 2)
+  PhuThuPhongDon  Decimal           @default(0) @map("phuthuphongdon") @db.Decimal(15, 2)
+  HinhAnhURL      String?           @map("hinhanhurl") @db.VarChar(500)
+  TrangThaiDuyet  String            @default("Nhap") @map("trangthaiduyet") @db.VarChar(20)
+  NgayTao         DateTime          @default(now()) @map("ngaytao") @db.Timestamp(6)
+  NgayCapNhat     DateTime?         @map("ngaycapnhat") @db.Timestamp(6)
+  DanhMuc         DanhMucTour       @relation(fields: [DanhMucID], references: [DanhMucID])
+  NhanVienTao     NhanVien          @relation(fields: [NhanVienTaoID], references: [NhanVienID])
+  LichKhoiHanh    LichKhoiHanh[]
+  ApDungKhuyenMai ApDungKhuyenMai[]
+  DanhGia         DanhGia[]
+
+  @@index([DanhMucID], map: "idx_tour_danhmuc")
+  @@index([TrangThaiDuyet], map: "idx_tour_trangthai")
+  @@map("tour")
+}
+
+model LichKhoiHanh {
+  LichID           Int              @id @default(autoincrement()) @map("lichid")
+  TourID           Int              @map("tourid")
+  MaLich           String           @unique @map("malich") @db.VarChar(30)
+  NgayKhoiHanh     DateTime         @map("ngaykhoihanh") @db.Timestamp(6)
+  NgayKetThuc      DateTime         @map("ngayketthuc") @db.Timestamp(6)
+  SoChoToiDa       Int              @map("sochotoida")
+  SoChoDaDat       Int              @default(0) @map("sochodadat")
+  GiaTourKhuyenMai Decimal?         @map("giatourkhuyenmai") @db.Decimal(15, 2)
+  TrangThai        String           @default("Cho khoi hanh") @map("trangthai") @db.VarChar(20)
+  Tour             Tour             @relation(fields: [TourID], references: [TourID])
+  DonDatTour       DonDatTour[]
+  PhieuDatDichVu   PhieuDatDichVu[]
+  DieuPhoiTour     DieuPhoiTour[]
+  BaoCaoQuyetToan  BaoCaoQuyetToan?
+
+  @@index([TourID], map: "idx_lich_tourid")
+  @@index([NgayKhoiHanh], map: "idx_lich_ngaykhoihanh")
+  @@map("lichkhoihanh")
+}
+
+// ============ 10-11. KHUYẾN MÃI ============
+model KhuyenMai {
+  KhuyenMaiID       Int               @id @default(autoincrement()) @map("khuyenmaiid")
+  MaKhuyenMai       String            @unique @map("makhuyenmai") @db.VarChar(50)
+  TenChuongTrinh    String            @map("tenchuongtrinh") @db.VarChar(200)
+  PhanTramGiam      Decimal           @map("phantramgiam") @db.Decimal(5, 2)
+  GiamToiDa         Decimal           @map("giamtoida") @db.Decimal(15, 2)
+  GiaTriDonToiThieu Decimal           @default(0) @map("giatridontoithieu") @db.Decimal(15, 2)
+  NgayBatDau        DateTime          @map("ngaybatdau") @db.Date
+  NgayKetThucKM     DateTime          @map("ngayketthuckm") @db.Date
+  TrangThai         Int               @default(1) @map("trangthai") @db.SmallInt
+  ApDungKhuyenMai   ApDungKhuyenMai[]
+  DonDatTour        DonDatTour[]
+
+  @@map("khuyenmai")
+}
+
+model ApDungKhuyenMai {
+  ApDungKMID  Int       @id @default(autoincrement()) @map("apdungkmid")
+  KhuyenMaiID Int       @map("khuyenmaiid")
+  TourID      Int       @map("tourid")
+  NgayApDung  DateTime  @default(now()) @map("ngayapdung") @db.Date
+  KhuyenMai   KhuyenMai @relation(fields: [KhuyenMaiID], references: [KhuyenMaiID], onDelete: Cascade)
+  Tour        Tour      @relation(fields: [TourID], references: [TourID], onDelete: Cascade)
+
+  @@unique([KhuyenMaiID, TourID])
+  @@map("apdungkhuyenmai")
+}
+
+// ============ 12-15. ĐƠN ĐẶT TOUR, THANH TOÁN, HÓA ĐƠN ============
+model DonDatTour {
+  DonHangID        Int                @id @default(autoincrement()) @map("donhangid")
+  KhachHangID      Int                @map("khachhangid")
+  LichID           Int                @map("lichid")
+  NhanVienXuLyID   Int?               @map("nhanvienxulyid")
+  KhuyenMaiID      Int?               @map("khuyenmaiid")
+  MaDon            String             @unique @map("madon") @db.VarChar(30)
+  NgayDat          DateTime           @default(now()) @map("ngaydat") @db.Timestamp(6)
+  SoLuongNguoiLon  Int                @default(1) @map("soluongnguoilon")
+  SoLuongTreEm     Int                @default(0) @map("soluongtreem")
+  TongTien         Decimal            @map("tongtien") @db.Decimal(15, 2)
+  GiamGia          Decimal            @default(0) @map("giamgia") @db.Decimal(15, 2)
+  TienCoc          Decimal            @default(0) @map("tiencoc") @db.Decimal(15, 2)
+  TienConLai       Decimal            @default(0) @map("tienconlai") @db.Decimal(15, 2)
+  TrangThaiDon     String             @default("Cho thanh toan") @map("trangthaidon") @db.VarChar(20)
+  PhuongThucTT     String?            @map("phuongthuctt") @db.VarChar(20)
+  GhiChu           String?            @map("ghichu")
+  KhachHang        KhachHang          @relation(fields: [KhachHangID], references: [KhachHangID])
+  LichKhoiHanh     LichKhoiHanh       @relation(fields: [LichID], references: [LichID])
+  NhanVienXuLy     NhanVien?          @relation(fields: [NhanVienXuLyID], references: [NhanVienID])
+  KhuyenMai        KhuyenMai?         @relation(fields: [KhuyenMaiID], references: [KhuyenMaiID])
+  ChiTietHanhKhach ChiTietHanhKhach[]
+  ThanhToan        ThanhToan[]
+  HoaDon           HoaDon[]
+  DanhGia          DanhGia[]
+
+  @@index([KhachHangID], map: "idx_don_khachhang")
+  @@index([LichID], map: "idx_don_lich")
+  @@index([TrangThaiDon], map: "idx_don_trangthai")
+  @@map("dondattour")
+}
+
+model ChiTietHanhKhach {
+  ChiTietID         Int        @id @default(autoincrement()) @map("chitietid")
+  DonHangID         Int        @map("donhangid")
+  HoTen             String     @map("hoten") @db.VarChar(100)
+  NgaySinh          DateTime?  @map("ngaysinh") @db.Date
+  LoaiKhach         String     @default("Nguoi lon") @map("loaikhach") @db.VarChar(20)
+  CCCD              String?    @map("cccd") @db.VarChar(12)
+  MaQRVe            String?    @unique @map("maqrve") @db.VarChar(255)
+  TrangThaiDiemDanh Int        @default(0) @map("trangthaidiemdanh") @db.SmallInt
+  GhiChu            String?    @map("ghichu")
+  DonDatTour        DonDatTour @relation(fields: [DonHangID], references: [DonHangID], onDelete: Cascade)
+
+  @@index([DonHangID], map: "idx_chitiethk_don")
+  @@map("chitiethanhkhach")
+}
+
+model ThanhToan {
+  ThanhToanID   Int        @id @default(autoincrement()) @map("thanhtoanid")
+  DonHangID     Int        @map("donhangid")
+  NhanVienID    Int?       @map("nhanvienid")
+  MaGiaoDich    String?    @unique @map("magiaodich") @db.VarChar(100)
+  SoTien        Decimal    @map("sotien") @db.Decimal(15, 2)
+  HinhThucTT    String     @map("hinhthuctt") @db.VarChar(20)
+  NgayThanhToan DateTime   @default(now()) @map("ngaythanhtoan") @db.Timestamp(6)
+  TrangThai     String     @default("Cho xu ly") @map("trangthai") @db.VarChar(20)
+  GhiChu        String?    @map("ghichu")
+  DonDatTour    DonDatTour @relation(fields: [DonHangID], references: [DonHangID])
+  NhanVien      NhanVien?  @relation(fields: [NhanVienID], references: [NhanVienID])
+  HoaDon        HoaDon[]
+
+  @@index([DonHangID], map: "idx_thanhtoan_don")
+  @@map("thanhtoan")
+}
+
+model HoaDon {
+  HoaDonID      Int        @id @default(autoincrement()) @map("hoadonid")
+  DonHangID     Int        @map("donhangid")
+  ThanhToanID   Int?       @map("thanhtoanid")
+  SoHoaDon      String     @unique @map("sohoadon") @db.VarChar(50)
+  TenCongTy     String?    @map("tencongty") @db.VarChar(200)
+  MaSoThue      String?    @map("masothue") @db.VarChar(20)
+  DiaChiCongTy  String?    @map("diachicongty") @db.VarChar(255)
+  NgayXuat      DateTime   @default(now()) @map("ngayxuat") @db.Date
+  TongTienVat   Decimal    @map("tongtienvat") @db.Decimal(15, 2)
+  FileHoaDonURL String?    @map("filehoadonurl") @db.VarChar(500)
+  DonDatTour    DonDatTour @relation(fields: [DonHangID], references: [DonHangID])
+  ThanhToan     ThanhToan? @relation(fields: [ThanhToanID], references: [ThanhToanID])
+
+  @@map("hoadon")
+}
+
+// ============ 16-19. NHÀ CUNG CẤP & ĐẶT DỊCH VỤ ============
+model NhaCungCap {
+  NhaCungCapID   Int                @id @default(autoincrement()) @map("nhacungcapid")
+  TenNCC         String             @map("tenncc") @db.VarChar(200)
+  LoaiNCC        String             @map("loaincc") @db.VarChar(50)
+  NguoiLienHe    String?            @map("nguoilienhe") @db.VarChar(100)
+  SoDienThoai    String             @map("sodienthoai") @db.VarChar(20)
+  Email          String?            @map("email") @db.VarChar(100)
+  DiaChi         String?            @map("diachi") @db.VarChar(255)
+  DanhGia        Decimal?           @map("danhgia") @db.Decimal(3, 2)
+  DichVu         DichVuNhaCungCap[]
+  PhieuDatDichVu PhieuDatDichVu[]
+
+  @@map("nhacungcap")
+}
+
+model DichVuNhaCungCap {
+  DichVuNCCID      Int                @id @default(autoincrement()) @map("dichvunccid")
+  NhaCungCapID     Int                @map("nhacungcapid")
+  TenDichVu        String             @map("tendichvu") @db.VarChar(200)
+  LoaiDichVu       String?            @map("loaidichvu") @db.VarChar(100)
+  DonGia           Decimal            @map("dongia") @db.Decimal(15, 2)
+  DonViTinh        String             @map("donvitinh") @db.VarChar(50)
+  MoTa             String?            @map("mota")
+  NhaCungCap       NhaCungCap         @relation(fields: [NhaCungCapID], references: [NhaCungCapID], onDelete: Cascade)
+  ChiTietDatDichVu ChiTietDatDichVu[]
+
+  @@map("dichvunhacungcap")
+}
+
+model PhieuDatDichVu {
+  PhieuDatID     Int                @id @default(autoincrement()) @map("phieudatid")
+  LichID         Int                @map("lichid")
+  NhanVienID     Int                @map("nhanvienid")
+  NhaCungCapID   Int                @map("nhacungcapid")
+  MaPhieu        String             @unique @map("maphieu") @db.VarChar(30)
+  NgayDat        DateTime           @default(now()) @map("ngaydat") @db.Date
+  TongTienDichVu Decimal            @default(0) @map("tongtiendichvu") @db.Decimal(15, 2)
+  TienDaCoc      Decimal            @default(0) @map("tiendacoc") @db.Decimal(15, 2)
+  TrangThai      String             @default("Moi tao") @map("trangthai") @db.VarChar(20)
+  GhiChu         String?            @map("ghichu")
+  LichKhoiHanh   LichKhoiHanh       @relation(fields: [LichID], references: [LichID])
+  NhanVien       NhanVien           @relation(fields: [NhanVienID], references: [NhanVienID])
+  NhaCungCap     NhaCungCap         @relation(fields: [NhaCungCapID], references: [NhaCungCapID])
+  ChiTiet        ChiTietDatDichVu[]
+
+  @@index([LichID], map: "idx_phieu_lich")
+  @@index([NhaCungCapID], map: "idx_phieu_ncc")
+  @@map("phieudatdichvu")
+}
+
+model ChiTietDatDichVu {
+  ChiTietPhieuID Int              @id @default(autoincrement()) @map("chitietphieuid")
+  PhieuDatID     Int              @map("phieudatid")
+  DichVuNCCID    Int              @map("dichvunccid")
+  SoLuong        Int              @map("soluong")
+  DonGia         Decimal          @map("dongia") @db.Decimal(15, 2)
+  ThanhTien      Decimal          @map("thanhtien") @db.Decimal(15, 2)
+  NgaySuDung     DateTime         @map("ngaysudung") @db.Date
+  PhieuDat       PhieuDatDichVu   @relation(fields: [PhieuDatID], references: [PhieuDatID], onDelete: Cascade)
+  DichVu         DichVuNhaCungCap @relation(fields: [DichVuNCCID], references: [DichVuNCCID])
+
+  @@map("chitietdatdichvu")
+}
+
+// ============ 20-22. ĐIỀU PHỐI, ĐÁNH GIÁ, QUYẾT TOÁN ============
+model DieuPhoiTour {
+  DieuPhoiID   Int          @id @default(autoincrement()) @map("dieuphoiid")
+  LichID       Int          @map("lichid")
+  HDVID        Int          @map("hdvid")
+  NhanVienID   Int          @map("nhanvienid")
+  NgayPhanCong DateTime     @default(now()) @map("ngayphancong") @db.Timestamp(6)
+  TrangThai    String       @default("Cho xac nhan") @map("trangthai") @db.VarChar(20)
+  GhiChu       String?      @map("ghichu")
+  LichKhoiHanh LichKhoiHanh @relation(fields: [LichID], references: [LichID])
+  HuongDanVien HuongDanVien @relation(fields: [HDVID], references: [HDVID])
+  NhanVien     NhanVien     @relation(fields: [NhanVienID], references: [NhanVienID])
+
+  @@unique([LichID, HDVID])
+  @@index([LichID], map: "idx_dieupho_lich")
+  @@index([HDVID], map: "idx_dieupho_hdv")
+  @@map("dieuphoitour")
+}
+
+model DanhGia {
+  DanhGiaID      Int        @id @default(autoincrement()) @map("danhgiaid")
+  KhachHangID    Int        @map("khachhangid")
+  TourID         Int        @map("tourid")
+  DonHangID      Int        @map("donhangid")
+  SoSao          Int        @map("sosao") @db.SmallInt
+  BinhLuan       String?    @map("binhluan")
+  NgayDanhGia    DateTime   @default(now()) @map("ngaydanhgia") @db.Timestamp(6)
+  TrangThaiDuyet String     @default("Cho duyet") @map("trangthaiduyet") @db.VarChar(20)
+  KhachHang      KhachHang  @relation(fields: [KhachHangID], references: [KhachHangID])
+  Tour           Tour       @relation(fields: [TourID], references: [TourID])
+  DonDatTour     DonDatTour @relation(fields: [DonHangID], references: [DonHangID])
+
+  @@unique([KhachHangID, DonHangID])
+  @@index([TourID], map: "idx_danhgia_tour")
+  @@map("danhgia")
+}
+
+model BaoCaoQuyetToan {
+  QuyetToanID    Int          @id @default(autoincrement()) @map("quyettoanid")
+  LichID         Int          @unique @map("lichid")
+  NhanVienLapID  Int          @map("nhanvienlapid")
+  TongThu        Decimal      @default(0) @map("tongthu") @db.Decimal(15, 2)
+  TongChi        Decimal      @default(0) @map("tongchi") @db.Decimal(15, 2)
+  // Cột GENERATED trong SQL (TongThu - TongChi) -> chỉ đọc, không ghi
+  LoiNhuan       Decimal?     @map("loinhuan") @db.Decimal(15, 2)
+  NgayLap        DateTime     @default(now()) @map("ngaylap") @db.Timestamp(6)
+  TrangThaiDuyet String       @default("Nhap") @map("trangthaiduyet") @db.VarChar(20)
+  GhiChu         String?      @map("ghichu")
+  LichKhoiHanh   LichKhoiHanh @relation(fields: [LichID], references: [LichID])
+  NhanVienLap    NhanVien     @relation(fields: [NhanVienLapID], references: [NhanVienID])
+
+  @@map("baocaoquyettoan")
+}

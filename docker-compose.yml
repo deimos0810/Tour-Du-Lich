@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: viettour-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: viettour
+      POSTGRES_PASSWORD: viettour123
+      POSTGRES_DB: quanlytourdulich
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  pgdata:
