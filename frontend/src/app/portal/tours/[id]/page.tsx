@@ -67,8 +67,9 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
 
   // Modal Thanh toán sau khi đặt tour thành công
   const [createdBooking, setCreatedBooking] = useState<{ MaDon: string; TongTien: number; DonHangID: number } | null>(null);
-  const [payMethod, setPayMethod] = useState<'VNPAY' | 'CASH_CARD'>('VNPAY');
+  const [payMethod, setPayMethod] = useState<'VNPAY' | 'ZALOPAY' | 'CASH_CARD'>('VNPAY');
   const [loadingVnpay, setLoadingVnpay] = useState(false);
+  const [loadingZalopay, setLoadingZalopay] = useState(false);
   const [confirmingPay, setConfirmingPay] = useState(false);
 
   const handlePayVNPay = async (donHangId: number, amount: number, maDon: string) => {
@@ -89,6 +90,27 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
       alert('Không thể kết nối cổng VNPay: ' + (err?.message || 'Lỗi kết nối'));
     } finally {
       setLoadingVnpay(false);
+    }
+  };
+
+  const handlePayZaloPay = async (donHangId: number, amount: number, maDon: string) => {
+    try {
+      setLoadingZalopay(true);
+      const res = await api<{ order_url: string }>('/zalopay/create-payment', {
+        method: 'POST',
+        body: JSON.stringify({
+          donHangId,
+          amount,
+          orderInfo: `Thanh toan don tour ${maDon} qua ZaloPay`,
+        }),
+      });
+      if (res.order_url) {
+        window.location.href = res.order_url;
+      }
+    } catch (err: any) {
+      alert('Không thể kết nối cổng ZaloPay: ' + (err?.message || 'Lỗi kết nối'));
+    } finally {
+      setLoadingZalopay(false);
     }
   };
 
@@ -707,31 +729,43 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
               <div style={{ fontSize: '22px', fontWeight: 900, color: '#005BAA' }}>{vnd(createdBooking.TongTien)}</div>
             </div>
 
-            {/* TAB CHUYỂN ĐỔI: VNPAY vs TIỀN MẶT/THẺ */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '14px', background: '#F1F5F9', padding: '4px', borderRadius: '10px' }}>
+            {/* TAB CHUYỂN ĐỔI: VNPAY vs ZALOPAY vs TIỀN MẶT/THẺ */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '14px', background: '#F1F5F9', padding: '4px', borderRadius: '10px' }}>
               <button
                 onClick={() => setPayMethod('VNPAY')}
                 style={{
-                  padding: '9px 8px', border: 'none', borderRadius: '6px',
+                  padding: '9px 6px', border: 'none', borderRadius: '6px',
                   background: payMethod === 'VNPAY' ? '#0284C7' : 'transparent',
                   color: payMethod === 'VNPAY' ? '#FFF' : '#475569',
-                  fontWeight: 700, fontSize: '12.5px', cursor: 'pointer',
+                  fontWeight: 700, fontSize: '12px', cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}
               >
-                Cổng VNPay Trực Tuyến
+                VNPay Sandbox
+              </button>
+              <button
+                onClick={() => setPayMethod('ZALOPAY')}
+                style={{
+                  padding: '9px 6px', border: 'none', borderRadius: '6px',
+                  background: payMethod === 'ZALOPAY' ? '#0068FF' : 'transparent',
+                  color: payMethod === 'ZALOPAY' ? '#FFF' : '#475569',
+                  fontWeight: 700, fontSize: '12px', cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                Ví ZaloPay
               </button>
               <button
                 onClick={() => setPayMethod('CASH_CARD')}
                 style={{
-                  padding: '9px 8px', border: 'none', borderRadius: '6px',
+                  padding: '9px 6px', border: 'none', borderRadius: '6px',
                   background: payMethod === 'CASH_CARD' ? '#0284C7' : 'transparent',
                   color: payMethod === 'CASH_CARD' ? '#FFF' : '#475569',
-                  fontWeight: 700, fontSize: '12.5px', cursor: 'pointer',
+                  fontWeight: 700, fontSize: '12px', cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}
               >
-                Tiền mặt / Thẻ tại quầy
+                Tại quầy
               </button>
             </div>
 
@@ -775,7 +809,46 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             )}
 
-            {/* TAB 2: TIỀN MẶT / THẺ TẠI QUẦY (GIỮ CHỖ) */}
+            {/* TAB 2: CỔNG ZALOPAY SANDBOX */}
+            {payMethod === 'ZALOPAY' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{
+                  background: '#EFF6FF',
+                  border: '1px solid #BFDBFE',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  fontSize: '12.5px',
+                  color: '#1E40AF',
+                  lineHeight: 1.5,
+                }}>
+                  <div style={{ fontWeight: 800, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ background: '#0068FF', color: '#FFF', borderRadius: '4px', padding: '1px 6px', fontSize: '11px', fontWeight: 900 }}>ZaloPay</span>
+                    Cổng Ví Điện Tử ZaloPay Sandbox
+                  </div>
+                  <div>Thanh toán tức thì bằng App ZaloPay / Ví điện tử hoặc chuyển khoản Napas 24/7. Tự động xác thực giao dịch sau khi hoàn tất.</div>
+                </div>
+
+                <button
+                  onClick={() => handlePayZaloPay(createdBooking.DonHangID, createdBooking.TongTien, createdBooking.MaDon)}
+                  disabled={loadingZalopay}
+                  className="btn btn-primary"
+                  style={{
+                    width: '100%',
+                    padding: '13px',
+                    background: '#0068FF',
+                    borderColor: '#0068FF',
+                    fontWeight: 700,
+                    fontSize: '14px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {loadingZalopay ? 'Đang kết nối cổng ZaloPay...' : 'Thanh toán ngay qua Ví ZaloPay Sandbox →'}
+                </button>
+              </div>
+            )}
+
+            {/* TAB 3: TIỀN MẶT / THẺ TẠI QUẦY (GIỮ CHỖ) */}
             {payMethod === 'CASH_CARD' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div style={{

@@ -123,6 +123,7 @@ model Tour {
   LichTrinh       String?           @map("lichtrinh")
   PhongCachTour   String?           @map("phongcachtour") @db.VarChar(50)
   PhuongTien      String?           @map("phuongtien") @db.VarChar(100)
+  DichVuDiKem     String?           @map("dichvudikem")
   GiaNguoiLon     Decimal           @map("gianguoilon") @db.Decimal(15, 2)
   GiaTreEm        Decimal           @map("giatreem") @db.Decimal(15, 2)
   PhuThuPhongDon  Decimal           @default(0) @map("phuthuphongdon") @db.Decimal(15, 2)

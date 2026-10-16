@@ -133,6 +133,7 @@ CREATE TABLE IF NOT EXISTS Tour (
     LichTrinh       TEXT            NULL,
     PhongCachTour   VARCHAR(50)     NULL,
     PhuongTien      VARCHAR(100)    NULL,
+    DichVuDiKem     TEXT            NULL,
     GiaNguoiLon     NUMERIC(15,2)   NOT NULL CHECK (GiaNguoiLon >= 0),
     GiaTreEm        NUMERIC(15,2)   NOT NULL CHECK (GiaTreEm >= 0),
     PhuThuPhongDon  NUMERIC(15,2)   NOT NULL DEFAULT 0,
@@ -242,7 +243,7 @@ CREATE TABLE IF NOT EXISTS DonDatTour (
     TrangThaiDon     VARCHAR(20)     NOT NULL DEFAULT 'Cho thanh toan'
                                       CHECK (TrangThaiDon IN ('Cho thanh toan','Da dat coc','Da thanh toan','Da xac nhan','Dang thuc hien','Hoan thanh','Da huy')),
     PhuongThucTT     VARCHAR(20)     NULL
-                                      CHECK (PhuongThucTT IN ('VNPay','Chuyen khoan','Tien mat','MoMo')),
+                                      CHECK (PhuongThucTT IN ('VNPay','ZaloPay','Chuyen khoan','Tien mat','MoMo')),
     GhiChu           TEXT            NULL,
     CONSTRAINT chk_sl_khach CHECK (SoLuongNguoiLon + SoLuongTreEm > 0)
 );
@@ -279,7 +280,7 @@ CREATE TABLE IF NOT EXISTS ThanhToan (
     MaGiaoDich    VARCHAR(100)    NULL UNIQUE,
     SoTien        NUMERIC(15,2)   NOT NULL CHECK (SoTien > 0),
     HinhThucTT    VARCHAR(20)     NOT NULL
-                                   CHECK (HinhThucTT IN ('VNPay','Chuyen khoan','Tien mat','MoMo')),
+                                   CHECK (HinhThucTT IN ('VNPay','ZaloPay','Chuyen khoan','Tien mat','MoMo')),
     NgayThanhToan TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     TrangThai     VARCHAR(20)     NOT NULL DEFAULT 'Cho xu ly'
                                    CHECK (TrangThai IN ('Cho xu ly','Thanh cong','That bai','Da hoan tien')),

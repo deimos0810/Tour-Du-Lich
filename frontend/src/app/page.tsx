@@ -54,6 +54,9 @@ export default function DashboardPage() {
           <h1 className="page-title">Dashboard tổng quan</h1>
           <p className="page-desc">Tình hình kinh doanh và vận hành tour trong tháng — Chức danh: <strong>{user.primaryRole}</strong></p>
         </div>
+        <Link href="/reports" className="btn btn-outline" style={{ fontWeight: 600, color: '#0D6EFD', borderColor: '#BFDBFE', background: '#EFF6FF' }}>
+          📊 Xem báo cáo phân tích mùa cao điểm & Top tour →
+        </Link>
       </div>
       <ApiNotice error={summary.error} />
 

@@ -7,7 +7,9 @@ import { BookingsModule } from './modules/bookings.module.js';
 import { OperationsModule } from './modules/operations.module.js';
 import { AuthModule } from './modules/auth.module.js';
 import { VNPayModule } from './modules/vnpay.module.js';
+import { ZaloPayModule } from './modules/zalopay.module.js';
 import { PortalModule } from './modules/portal.module.js';
+import { ManagementModule } from './modules/management.module.js';
 
 @Module({
   imports: [
@@ -19,7 +21,9 @@ import { PortalModule } from './modules/portal.module.js';
     OperationsModule,
     AuthModule,
     VNPayModule,
+    ZaloPayModule,
     PortalModule,
+    ManagementModule,
   ],
 })
 export class AppModule {}

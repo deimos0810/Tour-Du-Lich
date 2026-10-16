@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoun
 import { Prisma } from '@prisma/client';
 import * as nodemailer from 'nodemailer';
 import { PrismaService } from '../prisma/prisma.module.js';
+import { hashPassword, isHashed, validatePasswordStrength, verifyPassword } from '../common/password.js';
 
 // In-memory store cho mã OTP lấy lại mật khẩu: Key là Email, Value là { code, expiresAt }
 const otpStore = new Map<string, { code: string; expiresAt: number }>();
@@ -26,12 +27,14 @@ export class AuthService {
   async registerCustomer(dto: { email: string; password: string; hoTen: string; phone: string; cccd?: string }) {
     const existing = await this.prisma.taiKhoan.findUnique({ where: { Email: dto.email } });
     if (existing) throw new BadRequestException('Email này đã được đăng ký tài khoản!');
+    const pwErr = validatePasswordStrength(dto.password);
+    if (pwErr) throw new BadRequestException(pwErr);
 
     return this.prisma.$transaction(async (tx) => {
       const tk = await tx.taiKhoan.create({
         data: {
           Email: dto.email,
-          MatKhauHash: dto.password,
+          MatKhauHash: hashPassword(dto.password),
           SoDienThoai: dto.phone,
           TrangThai: 1,
         },
@@ -71,12 +74,17 @@ export class AuthService {
       },
     });
 
-    if (!tk || tk.MatKhauHash !== dto.password) {
+    if (!tk || !verifyPassword(dto.password, tk.MatKhauHash)) {
       throw new BadRequestException('Email hoặc mật khẩu không chính xác!');
     }
 
     if (tk.TrangThai === 0) {
       throw new BadRequestException('Tài khoản của bạn đã bị tạm khóa!');
+    }
+
+    // Nâng cấp mật khẩu plaintext (dữ liệu seed cũ) sang dạng băm scrypt
+    if (!isHashed(tk.MatKhauHash)) {
+      await this.prisma.taiKhoan.update({ where: { TaiKhoanID: tk.TaiKhoanID }, data: { MatKhauHash: hashPassword(dto.password) } });
     }
 
     const roles = tk.PhanQuyen.map((p) => p.VaiTro.TenVaiTro);
@@ -207,16 +215,32 @@ export class AuthService {
       throw new BadRequestException('Mã OTP không chính xác!');
     }
 
-    // Cập nhật mật khẩu trong CSDL
+    const pwErr = validatePasswordStrength(dto.newPassword);
+    if (pwErr) throw new BadRequestException(pwErr);
+
+    // Cập nhật mật khẩu trong CSDL (đã băm)
     await this.prisma.taiKhoan.update({
       where: { Email: dto.email },
-      data: { MatKhauHash: dto.newPassword },
+      data: { MatKhauHash: hashPassword(dto.newPassword) },
     });
 
     // Xóa OTP đã sử dụng
     otpStore.delete(dto.email);
 
     return { message: 'Đổi mật khẩu thành công! Bạn có thể đăng nhập bằng mật khẩu mới.' };
+  }
+
+  /** Đổi mật khẩu khi đang đăng nhập (yêu cầu mật khẩu cũ) */
+  async changePassword(dto: { email: string; oldPassword: string; newPassword: string }) {
+    const tk = await this.prisma.taiKhoan.findUnique({ where: { Email: dto.email } });
+    if (!tk || !verifyPassword(dto.oldPassword, tk.MatKhauHash)) {
+      throw new BadRequestException('Mật khẩu hiện tại không chính xác!');
+    }
+    const pwErr = validatePasswordStrength(dto.newPassword);
+    if (pwErr) throw new BadRequestException(pwErr);
+    if (dto.oldPassword === dto.newPassword) throw new BadRequestException('Mật khẩu mới phải khác mật khẩu cũ');
+    await this.prisma.taiKhoan.update({ where: { TaiKhoanID: tk.TaiKhoanID }, data: { MatKhauHash: hashPassword(dto.newPassword) } });
+    return { message: 'Đổi mật khẩu thành công!' };
   }
 
   async createBookingCustomer(dto: {
@@ -234,11 +258,19 @@ export class AuthService {
       loaiKhach?: string;
     }>;
   }) {
+    if (!dto.khachHangId) throw new BadRequestException('Vui lòng đăng nhập tài khoản khách hàng trước khi đặt tour!');
+    if (!dto.soLuongNguoiLon || dto.soLuongNguoiLon < 1 || dto.soLuongTreEm < 0) {
+      throw new BadRequestException('Đơn đặt tour cần ít nhất 1 người lớn');
+    }
     return this.prisma.$transaction(async (tx) => {
       const lich = await tx.lichKhoiHanh.findUniqueOrThrow({
         where: { LichID: dto.lichId },
         include: { Tour: true },
       });
+
+      if (lich.TrangThai !== 'Cho khoi hanh' || lich.NgayKhoiHanh <= new Date()) {
+        throw new BadRequestException('Lịch khởi hành này đã đóng hoặc đã khởi hành, vui lòng chọn ngày khác!');
+      }
 
       if (lich.SoChoDaDat + dto.soLuongNguoiLon + dto.soLuongTreEm > lich.SoChoToiDa) {
         throw new BadRequestException('Lịch khởi hành này đã không còn đủ số chỗ yêu cầu!');
@@ -356,6 +388,11 @@ export class AuthController {
     return this.service.resetPasswordWithOTP(body);
   }
 
+  @Post('change-password')
+  changePassword(@Body() body: { email: string; oldPassword: string; newPassword: string }) {
+    return this.service.changePassword(body);
+  }
+
   @Post('customer-booking')
   createBooking(@Body() body: {
     khachHangId: number;
@@ -382,8 +419,9 @@ export class PortalController {
 
   @Get('my-bookings')
   async getMyBookings(@Query('customerId') customerId?: string) {
+    const cid = customerId && !Number.isNaN(Number(customerId)) ? Number(customerId) : 1;
     return this.prisma.donDatTour.findMany({
-      where: customerId ? { KhachHangID: Number(customerId) } : undefined,
+      where: { KhachHangID: cid },
       include: {
         LichKhoiHanh: {
           include: {

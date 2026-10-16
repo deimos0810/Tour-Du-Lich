@@ -14,15 +14,15 @@ export default function Sidebar() {
     if (primaryRole === 'Admin') return true;
 
     if (primaryRole === 'Dieu hanh') {
-      return ['/', '/tours', '/departures', '/guides', '/suppliers', '/customers'].includes(href);
+      return ['/', '/tours', '/departures', '/guides', '/suppliers', '/customers', '/promotions', '/reports'].includes(href);
     }
 
     if (primaryRole === 'Ke toan') {
-      return ['/', '/bookings', '/settlements', '/suppliers', '/customers'].includes(href);
+      return ['/', '/bookings', '/settlements', '/suppliers', '/customers', '/reports'].includes(href);
     }
 
     if (primaryRole === 'HDV') {
-      return ['/departures'].includes(href);
+      return ['/departures', '/guides'].includes(href);
     }
 
     if (primaryRole === 'Khach hang') {
@@ -35,7 +35,10 @@ export default function Sidebar() {
   const NAV = [
     {
       title: 'TỔNG QUAN',
-      items: [{ href: '/', label: 'Dashboard tổng quan' }],
+      items: [
+        { href: '/', label: 'Dashboard tổng quan' },
+        { href: '/reports', label: 'Báo cáo thống kê tour' },
+      ],
     },
     {
       title: 'KINH DOANH & KHÁCH HÀNG',
@@ -43,15 +46,22 @@ export default function Sidebar() {
         { href: '/tours', label: 'Quản lý tour du lịch' },
         { href: '/departures', label: 'Lịch khởi hành' },
         { href: '/bookings', label: 'Booking & đặt cọc' },
+        { href: '/promotions', label: 'Khuyến mãi & voucher' },
         { href: '/customers', label: 'Danh sách khách hàng' },
       ],
     },
     {
       title: 'VẬN HÀNH & ĐIỀU HÀNH',
       items: [
-        { href: '/guides', label: 'Điều phối & HDV' },
+        { href: '/guides', label: 'Điều phối & tính công HDV' },
         { href: '/suppliers', label: 'Nhà cung cấp dịch vụ' },
         { href: '/settlements', label: 'Quyết toán tài chính' },
+      ],
+    },
+    {
+      title: 'HỆ THỐNG & TÀI KHOẢN',
+      items: [
+        { href: '/users', label: 'Quản trị người dùng & quyền' },
       ],
     },
     {
