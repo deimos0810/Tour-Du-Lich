@@ -3,6 +3,7 @@ import { useState } from 'react';
 import CustomerHeader from '@/components/customer/CustomerHeader';
 import CustomerFooter from '@/components/customer/CustomerFooter';
 import CustomerAccountLayout from '@/components/customer/CustomerAccountLayout';
+import { Lock, AlertCircle, Check, ShieldCheck } from 'lucide-react';
 
 export default function ChangePasswordPage() {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -43,38 +44,42 @@ export default function ChangePasswordPage() {
   };
 
   return (
-    <div style={{ background: '#F8FAFC', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: '#FAFAFA', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <CustomerHeader />
 
       <CustomerAccountLayout>
-        <div className="card" style={{ padding: '28px', borderRadius: '12px', maxWidth: '560px' }}>
-          <div style={{ marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid #E2E8F0' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#0F172A', marginBottom: '4px' }}>🔒 Đổi mật khẩu</h2>
-            <p style={{ fontSize: '13px', color: '#64748B' }}>Để bảo mật tài khoản, vui lòng không chia sẻ mật khẩu cho người khác</p>
+        <div style={{ background: '#FFFFFF', padding: '24px', borderRadius: '8px', border: '1px solid #E4E4E7', maxWidth: '540px' }}>
+          <div style={{ marginBottom: '20px', paddingBottom: '14px', borderBottom: '1px solid #E4E4E7' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <Lock size={18} strokeWidth={1.5} style={{ color: '#09090B' }} />
+              <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#09090B', margin: 0, letterSpacing: '-0.02em' }}>Đổi mật khẩu</h2>
+            </div>
+            <p style={{ fontSize: '12.5px', color: '#71717A', margin: 0 }}>Để bảo mật tài khoản, vui lòng không chia sẻ mật khẩu cho người khác</p>
           </div>
 
           {errorMsg && (
-            <div className="notice" style={{ background: '#FEE2E2', borderColor: '#FECACA', color: '#B91C1C', marginBottom: '20px' }}>
-              ⚠️ {errorMsg}
+            <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', padding: '10px 14px', borderRadius: '6px', fontSize: '12.5px', fontWeight: 600, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <AlertCircle size={14} strokeWidth={1.5} />
+              <span>{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="notice" style={{ background: '#DCFCE7', borderColor: '#BBF7D0', color: '#15803D', marginBottom: '20px' }}>
-              ✓ {successMsg}
+            <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', color: '#065F46', padding: '10px 14px', borderRadius: '6px', fontSize: '12.5px', fontWeight: 600, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Check size={14} strokeWidth={2} />
+              <span>{successMsg}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div>
-              <label style={{ fontSize: '12.5px', fontWeight: 600, color: '#1E293B', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: '#09090B', display: 'block', marginBottom: '4px' }}>
                 Mật khẩu hiện tại <span style={{ color: '#DC2626' }}>*</span>
               </label>
               <input
-                className="input"
                 type="password"
                 required
-                style={{ width: '100%' }}
+                style={{ width: '100%', padding: '8px 12px', fontSize: '13px', borderRadius: '6px', border: '1px solid #E4E4E7', outline: 'none' }}
                 placeholder="Nhập mật khẩu cũ"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
@@ -82,14 +87,13 @@ export default function ChangePasswordPage() {
             </div>
 
             <div>
-              <label style={{ fontSize: '12.5px', fontWeight: 600, color: '#1E293B', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: '#09090B', display: 'block', marginBottom: '4px' }}>
                 Mật khẩu mới <span style={{ color: '#DC2626' }}>*</span>
               </label>
               <input
-                className="input"
                 type="password"
                 required
-                style={{ width: '100%' }}
+                style={{ width: '100%', padding: '8px 12px', fontSize: '13px', borderRadius: '6px', border: '1px solid #E4E4E7', outline: 'none' }}
                 placeholder="Tối thiểu 8 ký tự, bao gồm chữ và số"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
@@ -97,29 +101,47 @@ export default function ChangePasswordPage() {
             </div>
 
             <div>
-              <label style={{ fontSize: '12.5px', fontWeight: 600, color: '#1E293B', display: 'block', marginBottom: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: '#09090B', display: 'block', marginBottom: '4px' }}>
                 Xác nhận mật khẩu mới <span style={{ color: '#DC2626' }}>*</span>
               </label>
               <input
-                className="input"
                 type="password"
                 required
-                style={{ width: '100%' }}
+                style={{ width: '100%', padding: '8px 12px', fontSize: '13px', borderRadius: '6px', border: '1px solid #E4E4E7', outline: 'none' }}
                 placeholder="Nhập lại mật khẩu mới"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
               />
             </div>
 
-            <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '6px', border: '1px solid #E2E8F0', fontSize: '12.5px', color: '#64748B' }}>
-              <div>📌 <strong>Yêu cầu mật khẩu an toàn:</strong></div>
-              <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
+            <div style={{ background: '#F4F4F5', padding: '12px', borderRadius: '6px', border: '1px solid #E4E4E7', fontSize: '12px', color: '#52525B' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#09090B', marginBottom: '4px' }}>
+                <ShieldCheck size={14} strokeWidth={1.5} />
+                <span>Yêu cầu mật khẩu an toàn:</span>
+              </div>
+              <ul style={{ margin: '2px 0 0 16px', padding: 0, lineHeight: 1.6 }}>
                 <li>Độ dài tối thiểu 8 ký tự</li>
                 <li>Chứa ít nhất 1 chữ cái và 1 số</li>
               </ul>
             </div>
 
-            <button className="btn btn-primary" type="submit" disabled={loading} style={{ padding: '10px', fontSize: '14px', marginTop: '6px' }}>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '9px 16px',
+                fontSize: '13px',
+                fontWeight: 600,
+                borderRadius: '6px',
+                background: '#09090B',
+                color: '#FAFAFA',
+                border: 'none',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.7 : 1,
+                marginTop: '4px'
+              }}
+            >
               {loading ? 'Đang cập nhật...' : 'Đổi mật khẩu'}
             </button>
           </form>

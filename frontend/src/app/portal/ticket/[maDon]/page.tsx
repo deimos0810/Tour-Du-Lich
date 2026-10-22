@@ -3,8 +3,9 @@ import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import CustomerHeader from '@/components/customer/CustomerHeader';
 import CustomerFooter from '@/components/customer/CustomerFooter';
-import { api } from '@/lib/api';
+import { api, downloadFile } from '@/lib/api';
 import { vnd } from '@/lib/ui';
+import { Printer, AlertTriangle, Check, Plane, Clock, UserCheck } from 'lucide-react';
 
 type Passenger = {
   ChiTietID: number;
@@ -147,27 +148,57 @@ export default function TicketDetailPage({ params }: { params: Promise<{ maDon: 
                 cursor: 'pointer',
               }}
             >
-              🖨️ In Vé / Lưu PDF
+              <Printer size={14} strokeWidth={1.5} /> In Vé / Lưu PDF
+            </button>
+            <button
+              onClick={() => downloadFile(`/export/ticket/pdf/${maDon}`, `ve-dien-tu-${maDon}.pdf`).catch((e) => alert(e instanceof Error ? e.message : 'Không thể tải vé PDF'))}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '9px 16px',
+                background: 'var(--zinc-900)',
+                color: '#FFF',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Tải Vé PDF (Boarding Pass)
             </button>
           </div>
         </div>
 
         {checkinMsg && (
-          <div style={{ background: '#10B981', color: '#FFF', padding: '12px 20px', borderRadius: '8px', marginBottom: '20px', fontWeight: 700, textAlign: 'center' }}>
+          <div style={{ background: 'var(--emerald-600)', color: '#FFF', padding: '10px 18px', borderRadius: 'var(--radius-md)', marginBottom: '20px', fontWeight: 600, textAlign: 'center', fontSize: '13px' }}>
             {checkinMsg}
           </div>
         )}
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: '#005BAA', fontWeight: 700 }}>
+          <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--zinc-600)', fontWeight: 600 }}>
             Đang tải dữ liệu vé điện tử...
           </div>
         ) : error || !ticket ? (
-          <div style={{ background: '#FFF', padding: '40px', borderRadius: '16px', textAlign: 'center', border: '1px solid #E2E8F0' }}>
-            <div style={{ fontSize: '48px', marginBottom: '12px' }}>⚠️</div>
-            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>Không tìm thấy vé điện tử</h2>
-            <p style={{ color: '#64748B', fontSize: '14px' }}>Mã đơn <strong>{maDon}</strong> không tồn tại hoặc đã bị gỡ bỏ.</p>
-            <Link href="/portal" style={{ display: 'inline-block', marginTop: '16px', color: '#005BAA', fontWeight: 700 }}>Về Trang chủ VietTour</Link>
+          <div style={{ background: '#FFF', padding: '40px', borderRadius: 'var(--radius-lg)', textAlign: 'center', border: '1px solid var(--border)' }}>
+            <div style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--rose-50)',
+              color: 'var(--rose-600)',
+              display: 'grid',
+              placeItems: 'center',
+              margin: '0 auto 12px',
+              border: '1px solid var(--rose-200)',
+            }}>
+              <AlertTriangle size={22} strokeWidth={1.5} />
+            </div>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--zinc-900)', marginBottom: '6px' }}>Không tìm thấy vé điện tử</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Mã đơn <strong>{maDon}</strong> không tồn tại hoặc đã bị gỡ bỏ.</p>
+            <Link href="/portal" style={{ display: 'inline-block', marginTop: '16px', color: 'var(--zinc-900)', fontWeight: 600, fontSize: '13px' }}>Về Trang chủ VietTour</Link>
           </div>
         ) : (
           /* ========================================================================= */
@@ -210,26 +241,36 @@ export default function TicketDetailPage({ params }: { params: Promise<{ maDon: 
 
               <div style={{ textAlign: 'right' }}>
                 <span style={{
-                  background: ticket.TrangThaiDon === 'Da thanh toan' ? '#10B981' : '#F59E0B',
+                  background: ticket.TrangThaiDon === 'Da thanh toan' ? 'var(--emerald-600)' : 'var(--amber-600)',
                   color: '#FFFFFF',
-                  padding: '6px 14px',
-                  borderRadius: '20px',
-                  fontSize: '12.5px',
-                  fontWeight: 800,
-                  display: 'inline-block',
+                  padding: '5px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '11.5px',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
                 }}>
-                  {ticket.TrangThaiDon === 'Da thanh toan' ? '✓ ĐÃ XÁC THỰC — ĐÃ THANH TOÁN' : '⏳ CHỜ THANH TOÁN'}
+                  {ticket.TrangThaiDon === 'Da thanh toan' ? (
+                    <>
+                      <Check size={12} strokeWidth={2} /> ĐÃ XÁC THỰC — ĐÃ THANH TOÁN
+                    </>
+                  ) : (
+                    <>
+                      <Clock size={12} strokeWidth={1.5} /> CHỜ THANH TOÁN
+                    </>
+                  )}
                 </span>
-                <div style={{ fontSize: '13px', opacity: 0.85, marginTop: '6px' }}>
-                  Mã đơn: <strong style={{ color: '#FFF', fontSize: '15px' }}>{ticket.MaDon}</strong>
+                <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '6px' }}>
+                  Mã đơn: <strong style={{ color: '#FFF', fontSize: '14px' }}>{ticket.MaDon}</strong>
                 </div>
               </div>
             </div>
 
             {/* FLIGHT & ROUTE BANNER */}
             <div style={{
-              background: '#F8FAFC',
-              borderBottom: '1px dashed #CBD5E1',
+              background: 'var(--zinc-50)',
+              borderBottom: '1px dashed var(--border)',
               padding: '24px 32px',
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -237,23 +278,25 @@ export default function TicketDetailPage({ params }: { params: Promise<{ maDon: 
               alignItems: 'center',
             }}>
               <div>
-                <span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748B', fontWeight: 700 }}>Điểm Khởi Hành</span>
-                <div style={{ fontSize: '20px', fontWeight: 900, color: '#0F172A' }}>
+                <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>Điểm Khởi Hành</span>
+                <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--zinc-900)' }}>
                   {ticket.LichKhoiHanh?.Tour?.DiemKhoiHanh || 'TP. Hồ Chí Minh'}
                 </div>
-                <span style={{ fontSize: '12px', color: '#64748B' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                   {new Date(ticket.LichKhoiHanh?.NgayKhoiHanh).toLocaleDateString('vi-VN')}
                 </span>
               </div>
 
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '12px', color: '#005BAA', fontWeight: 700, marginBottom: '2px' }}>
-                  ✈️ {ticket.LichKhoiHanh?.Tour?.ThoiGian || 'Tour Trọn Gói'}
+                <div style={{ fontSize: '12px', color: 'var(--zinc-900)', fontWeight: 600, marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                  <Plane size={12} strokeWidth={1.5} /> {ticket.LichKhoiHanh?.Tour?.ThoiGian || 'Tour Trọn Gói'}
                 </div>
-                <div style={{ height: '2px', background: '#005BAA', position: 'relative', margin: '8px 20px' }}>
-                  <div style={{ position: 'absolute', right: '45%', top: '-8px', fontSize: '14px' }}>✈️</div>
+                <div style={{ height: '2px', background: 'var(--zinc-300)', position: 'relative', margin: '8px 20px' }}>
+                  <div style={{ position: 'absolute', right: '45%', top: '-8px', background: 'var(--zinc-50)', padding: '0 4px', display: 'flex' }}>
+                    <Plane size={12} strokeWidth={1.5} color="var(--zinc-700)" />
+                  </div>
                 </div>
-                <span style={{ fontSize: '11px', color: '#64748B' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                   Phương tiện: {ticket.LichKhoiHanh?.Tour?.PhuongTien || 'Máy bay & Xe du lịch'}
                 </span>
               </div>
@@ -321,19 +364,19 @@ export default function TicketDetailPage({ params }: { params: Promise<{ maDon: 
                     style={{ width: '150px', height: '150px', display: 'block' }}
                   />
                 </div>
-                <div style={{ fontSize: '11px', color: '#64748B', marginTop: '10px', lineHeight: 1.4 }}>
-                  📱 <strong>Quét bằng Camera</strong> điện thoại để xác thực vé & điểm danh lên xe
+                <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '10px', lineHeight: 1.4 }}>
+                  Quét bằng Camera điện thoại để xác thực vé & điểm danh lên xe
                 </div>
               </div>
             </div>
 
             {/* DANH SÁCH HÀNH KHÁCH & ĐIỂM DANH CHECK-IN */}
-            <div style={{ borderTop: '1px solid #E2E8F0', padding: '24px 32px', background: '#FAFAFA' }}>
+            <div style={{ borderTop: '1px solid var(--border)', padding: '24px 32px', background: 'var(--zinc-50)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h4 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                <h4 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--zinc-900)', margin: 0 }}>
                   Danh Sách Hành Khách Đi Tour ({ticket.ChiTietHanhKhach?.length || 1})
                 </h4>
-                <span style={{ fontSize: '12px', color: '#64748B' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                   Yêu cầu xuất trình Căn cước công dân (CCCD) khi lên máy bay và nhận phòng
                 </span>
               </div>
@@ -347,49 +390,53 @@ export default function TicketDetailPage({ params }: { params: Promise<{ maDon: 
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        padding: '14px 18px',
+                        padding: '12px 16px',
                         background: '#FFFFFF',
-                        border: '1px solid #E2E8F0',
-                        borderRadius: '10px',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-md)',
                         flexWrap: 'wrap',
                         gap: '10px',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#005BAA', color: '#FFF', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '13px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '26px', height: '26px', borderRadius: 'var(--radius-sm)', background: 'var(--zinc-900)', color: '#FFF', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: '12px' }}>
                           {idx + 1}
                         </div>
                         <div>
-                          <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A' }}>{p.HoTen}</div>
-                          <div style={{ fontSize: '12.5px', color: '#64748B', display: 'flex', gap: '12px', marginTop: '2px' }}>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--zinc-900)' }}>{p.HoTen}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: '12px', marginTop: '2px' }}>
                             <span>Loại khách: <strong>{p.LoaiKhach}</strong></span>
-                            {p.CCCD && <span>CCCD 12 số: <strong style={{ color: '#005BAA' }}>{p.CCCD}</strong></span>}
-                            <span>Mã vé cá nhân: <code style={{ color: '#E11D48' }}>{p.MaQRVe || `VT-${ticket.MaDon}-${idx + 1}`}</code></span>
+                            {p.CCCD && <span>CCCD: <strong style={{ color: 'var(--zinc-900)' }}>{p.CCCD}</strong></span>}
+                            <span>Mã vé: <code style={{ color: 'var(--zinc-900)' }}>{p.MaQRVe || `VT-${ticket.MaDon}-${idx + 1}`}</code></span>
                           </div>
                         </div>
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         {p.TrangThaiDiemDanh === 1 ? (
-                          <span style={{ background: '#DCFCE7', color: '#16A34A', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 800 }}>
-                            ✓ ĐÃ ĐIỂM DANH (CHECK-IN)
+                          <span style={{ background: 'var(--emerald-50)', color: 'var(--emerald-600)', border: '1px solid var(--emerald-200)', padding: '5px 10px', borderRadius: 'var(--radius-sm)', fontSize: '11.5px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Check size={12} strokeWidth={2} /> ĐÃ ĐIỂM DANH (CHECK-IN)
                           </span>
                         ) : (
                           <button
                             onClick={() => handleCheckin(p.ChiTietID)}
                             disabled={checkingInId === p.ChiTietID}
                             style={{
-                              background: '#005BAA',
+                              background: 'var(--zinc-900)',
                               color: '#FFF',
                               border: 'none',
-                              padding: '6px 14px',
-                              borderRadius: '6px',
-                              fontWeight: 700,
-                              fontSize: '12.5px',
+                              padding: '5px 12px',
+                              borderRadius: 'var(--radius-sm)',
+                              fontWeight: 600,
+                              fontSize: '12px',
                               cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
                             }}
                           >
-                            {checkingInId === p.ChiTietID ? 'Đang xác nhận...' : '📲 HDV Điểm Danh'}
+                            <UserCheck size={12} strokeWidth={1.5} />
+                            {checkingInId === p.ChiTietID ? 'Đang xác nhận...' : 'HDV Điểm Danh'}
                           </button>
                         )}
                       </div>

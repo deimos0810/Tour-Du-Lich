@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Get, Injectable, Module, Post, Q
 import * as crypto from 'crypto';
 import * as querystring from 'qs';
 import { PrismaService } from '../prisma/prisma.module.js';
+import { ExportModule, TicketMailService } from './export.module.js';
 
 function sortObject(obj: Record<string, any>) {
   const sorted: Record<string, any> = {};
@@ -20,7 +21,7 @@ function sortObject(obj: Record<string, any>) {
 
 @Injectable()
 export class VNPayService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private mail: TicketMailService) {}
 
   /** Tạo URL chuyển hướng sang Cổng VNPay Sandbox */
   createPaymentUrl(dto: { donHangId: number; amount: number; orderInfo: string; ipAddr: string }) {
@@ -108,28 +109,40 @@ export class VNPayService {
     const amount = Number(vnp_Params['vnp_Amount'] || 0) / 100;
 
     if (rspCode === '00' && orderId) {
-      // Cập nhật trạng thái đơn đặt tour trong CSDL PostgreSQL
-      await this.prisma.donDatTour.update({
-        where: { DonHangID: Number(orderId) },
-        data: {
-          TrangThaiDon: 'Da thanh toan',
-          TienCoc: amount,
-          TienConLai: 0,
-          PhuongThucTT: 'VNPay',
-        },
+      // Cập nhật đơn + ghi nhận thanh toán trong 1 transaction, khóa dòng đơn để IPN gọi lặp không ghi trùng
+      const result = await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT donhangid FROM dondattour WHERE donhangid = ${Number(orderId)} FOR UPDATE`;
+        const don = await tx.donDatTour.findUnique({ where: { DonHangID: Number(orderId) } });
+        if (!don) return { found: false as const };
+        if (don.TrangThaiDon === 'Da thanh toan') return { found: true as const, alreadyPaid: true, maDon: don.MaDon };
+
+        await tx.donDatTour.update({
+          where: { DonHangID: Number(orderId) },
+          data: {
+            TrangThaiDon: 'Da thanh toan',
+            TienCoc: amount,
+            TienConLai: 0,
+            PhuongThucTT: 'VNPay',
+          },
+        });
+
+        // Tạo hóa đơn lịch sử thanh toán
+        await tx.thanhToan.create({
+          data: {
+            DonHangID: Number(orderId),
+            MaGiaoDich: vnp_Params['vnp_TransactionNo'] || `VNP-${Date.now()}`,
+            SoTien: amount,
+            HinhThucTT: 'VNPay Sandbox',
+            TrangThai: 'Thanh cong',
+            GhiChu: `Thanh toán thành công cổng VNPay. Mã giao dịch: ${vnp_Params['vnp_TransactionNo']}`,
+          },
+        });
+        return { found: true as const, alreadyPaid: false, maDon: don.MaDon };
       });
 
-      // Tạo hóa đơn lịch sử thanh toán
-      await this.prisma.thanhToan.create({
-        data: {
-          DonHangID: Number(orderId),
-          MaGiaoDich: vnp_Params['vnp_TransactionNo'] || `VNP-${Date.now()}`,
-          SoTien: amount,
-          HinhThucTT: 'VNPay Sandbox',
-          TrangThai: 'Thanh cong',
-          GhiChu: `Thanh toán thành công cổng VNPay. Mã giao dịch: ${vnp_Params['vnp_TransactionNo']}`,
-        },
-      });
+      if (!result.found) return { RspCode: '01', Message: 'Order not found' };
+      // Gửi email xác nhận kèm vé điện tử QR (không chặn phản hồi cho VNPay)
+      if (!result.alreadyPaid) void this.mail.sendTicketEmail(result.maDon);
 
       return { RspCode: '00', Message: 'Confirm Success' };
     } else {
@@ -155,6 +168,7 @@ export class VNPayController {
 }
 
 @Module({
+  imports: [ExportModule],
   controllers: [VNPayController],
   providers: [VNPayService],
   exports: [VNPayService],

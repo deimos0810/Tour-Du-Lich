@@ -4,8 +4,10 @@ import Link from 'next/link';
 import CustomerHeader from '@/components/customer/CustomerHeader';
 import CustomerFooter from '@/components/customer/CustomerFooter';
 import { api, useApi } from '@/lib/api';
+import { bookingSchema, firstError } from '@/lib/validations';
 import { ApiNotice, vnd } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
+import { Search, MapPin, Calendar, Users, Clock, Plane, Star, Ticket, Check, X, CheckCircle2 } from 'lucide-react';
 
 type Review = {
   DanhGiaID: number;
@@ -207,9 +209,23 @@ export default function CustomerHomePage() {
       return;
     }
 
+    if (!user?.customerId) {
+      alert('Vui lòng đăng nhập tài khoản khách hàng để đặt tour!');
+      return;
+    }
+    const invalid = firstError(bookingSchema, {
+      soLuongNguoiLon: adults,
+      soLuongTreEm: children,
+      hanhKhach: passengers.map((p) => ({ hoTen: p.hoTen, cccd: p.cccd.trim() })),
+    });
+    if (invalid) {
+      alert(invalid);
+      return;
+    }
+
     setBookingLoading(true);
     try {
-      const customerId = user?.customerId || 1;
+      const customerId = user.customerId;
       const res = await api<{ MaDon: string; TongTien: string; DonHangID: number }>(
         '/auth/customer-booking',
         {
@@ -303,7 +319,7 @@ export default function CustomerHomePage() {
           const data = await res.json();
           if (data.TrangThaiDon === 'Da thanh toan') {
             clearInterval(interval);
-            alert(`🎉 Giao dịch thành công trên điện thoại! Đã kích hoạt vé điện tử cho mã đơn ${createdBooking.MaDon}.`);
+            alert(`Giao dịch thành công trên điện thoại! Đã kích hoạt vé điện tử cho mã đơn ${createdBooking.MaDon}.`);
             window.location.href = `/portal/ticket/${createdBooking.MaDon}`;
           }
         }
@@ -324,16 +340,21 @@ export default function CustomerHomePage() {
           bottom: '24px',
           left: '50%',
           transform: 'translateX(-50%)',
-          background: '#0F172A',
+          background: 'var(--zinc-900)',
           color: '#FFFFFF',
-          padding: '10px 20px',
-          borderRadius: '20px',
+          padding: '8px 16px',
+          borderRadius: 'var(--radius-md)',
           fontSize: '13px',
-          fontWeight: 700,
+          fontWeight: 600,
           zIndex: 2000,
-          boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+          boxShadow: 'var(--shadow-md)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          border: '1px solid var(--zinc-800)',
         }}>
-          ✓ {copyNotice}
+          <Check size={14} strokeWidth={2} />
+          <span>{copyNotice}</span>
         </div>
       )}
 
@@ -369,12 +390,12 @@ export default function CustomerHomePage() {
             {/* THANH TÌM KIẾM TOUR CAO CẤP */}
             <div style={{
               background: '#FFFFFF',
-              borderRadius: '16px',
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.25)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: 'var(--shadow-md)',
               padding: '18px 24px',
               textAlign: 'left',
-              color: '#0F172A',
-              border: '1px solid #E2E8F0',
+              color: 'var(--zinc-900)',
+              border: '1px solid var(--border)',
             }}>
               <div style={{
                 display: 'grid',
@@ -384,14 +405,14 @@ export default function CustomerHomePage() {
               }}>
                 {/* 1. KHỞI HÀNH TỪ */}
                 <div>
-                  <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--zinc-600)', display: 'block', marginBottom: '6px' }}>
                     Khởi hành từ
                   </label>
                   <select
                     className="select"
                     value={departLocation}
                     onChange={(e) => setDepartLocation(e.target.value)}
-                    style={{ width: '100%', padding: '10px 12px', fontSize: '13.5px', fontWeight: 600, borderRadius: '8px', border: '1px solid #CBD5E1' }}
+                    style={{ width: '100%', padding: '9px 12px', fontSize: '13px', fontWeight: 500, borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}
                   >
                     <option value="ALL">Tất cả điểm khởi hành</option>
                     <option value="TP.HCM">TP. Hồ Chí Minh (SGN)</option>
@@ -403,7 +424,7 @@ export default function CustomerHomePage() {
 
                 {/* 2. ĐIỂM ĐẾN */}
                 <div>
-                  <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--zinc-600)', display: 'block', marginBottom: '6px' }}>
                     Điểm đến mong muốn
                   </label>
                   <input
@@ -411,13 +432,13 @@ export default function CustomerHomePage() {
                     placeholder="Đà Nẵng, Sapa, Nhật Bản..."
                     value={destKeyword}
                     onChange={(e) => setDestKeyword(e.target.value)}
-                    style={{ width: '100%', padding: '10px 12px', fontSize: '13.5px', borderRadius: '8px', border: '1px solid #CBD5E1' }}
+                    style={{ width: '100%', padding: '9px 12px', fontSize: '13px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}
                   />
                 </div>
 
                 {/* 3. NGÀY ĐI */}
                 <div>
-                  <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--zinc-600)', display: 'block', marginBottom: '6px' }}>
                     Ngày khởi hành
                   </label>
                   <input
@@ -425,20 +446,20 @@ export default function CustomerHomePage() {
                     type="date"
                     value={departDate}
                     onChange={(e) => setDepartDate(e.target.value)}
-                    style={{ width: '100%', padding: '10px 12px', fontSize: '13.5px', borderRadius: '8px', border: '1px solid #CBD5E1' }}
+                    style={{ width: '100%', padding: '9px 12px', fontSize: '13px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}
                   />
                 </div>
 
                 {/* 4. MỨC NGÂN SÁCH */}
                 <div>
-                  <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--zinc-600)', display: 'block', marginBottom: '6px' }}>
                     Khoảng giá dự kiến
                   </label>
                   <select
                     className="select"
                     value={priceRange}
                     onChange={(e) => setPriceRange(e.target.value)}
-                    style={{ width: '100%', padding: '10px 12px', fontSize: '13.5px', borderRadius: '8px', border: '1px solid #CBD5E1' }}
+                    style={{ width: '100%', padding: '9px 12px', fontSize: '13px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}
                   >
                     <option value="ALL">Mọi mức giá</option>
                     <option value="UNDER_5M">Dưới 5 triệu</option>
@@ -455,21 +476,23 @@ export default function CustomerHomePage() {
                     el?.scrollIntoView({ behavior: 'smooth' });
                   }}
                   style={{
-                    padding: '11px 20px',
-                    background: '#0284C7',
-                    borderColor: '#0284C7',
+                    padding: '9px 18px',
+                    background: 'var(--zinc-900)',
+                    borderColor: 'var(--zinc-900)',
                     color: '#FFFFFF',
-                    fontWeight: 700,
-                    fontSize: '14px',
-                    height: '42px',
-                    borderRadius: '8px',
+                    fontWeight: 600,
+                    fontSize: '13.5px',
+                    height: '40px',
+                    borderRadius: 'var(--radius-md)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    gap: '6px',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                   }}
                 >
+                  <Search size={14} strokeWidth={1.5} />
                   Tìm tour
                 </button>
               </div>
@@ -483,24 +506,34 @@ export default function CustomerHomePage() {
         <section style={{ maxWidth: '1280px', margin: '-25px auto 40px', padding: '0 20px', position: 'relative', zIndex: 10 }}>
           <div style={{
             background: '#FFFFFF',
-            borderRadius: '16px',
-            padding: '18px 24px',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.06)',
-            border: '1px solid #E2E8F0',
+            borderRadius: 'var(--radius-lg)',
+            padding: '16px 20px',
+            boxShadow: 'var(--shadow-sm)',
+            border: '1px solid var(--border)',
             display: 'grid',
             gridTemplateColumns: 'auto 1fr',
             gap: '24px',
             alignItems: 'center',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '24px' }}>🎟️</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--zinc-100)',
+                color: 'var(--zinc-800)',
+                display: 'grid',
+                placeItems: 'center',
+              }}>
+                <Ticket size={18} strokeWidth={1.5} />
+              </div>
               <div>
-                <strong style={{ fontSize: '14.5px', color: '#0F172A', display: 'block' }}>MÃ ƯU ĐÃI NĂM 2026</strong>
-                <span style={{ fontSize: '12px', color: '#64748B' }}>Nhập mã khi đặt tour để được giảm ngay</span>
+                <strong style={{ fontSize: '13.5px', color: 'var(--zinc-900)', display: 'block', letterSpacing: '0.2px' }}>MÃ ƯU ĐÃI NĂM 2026</strong>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Nhập mã khi đặt tour để được giảm giá trực tiếp</span>
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-end' }}>
               {[
                 { code: 'VIETTOUR2026', label: 'Giảm 10% (Tối đa 1Tr)' },
                 { code: 'BAYHE2026', label: 'Tour Bay Giảm 15% (Tối đa 1.5Tr)' },
@@ -511,31 +544,31 @@ export default function CustomerHomePage() {
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    background: '#F8FAFC',
-                    border: '1px solid #CBD5E1',
-                    borderRadius: '8px',
-                    padding: '6px 12px',
+                    background: 'var(--zinc-50)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '5px 10px',
                     gap: '8px',
-                    fontSize: '12.5px',
+                    fontSize: '12px',
                   }}
                 >
-                  <code style={{ fontWeight: 800, color: '#0369A1', fontSize: '13px' }}>{v.code}</code>
-                  <span style={{ color: '#475569', fontSize: '12px' }}>({v.label})</span>
+                  <code style={{ fontWeight: 700, color: 'var(--zinc-900)', fontSize: '12.5px' }}>{v.code}</code>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '11.5px' }}>({v.label})</span>
                   <button
                     onClick={() => handleCopy(v.code, `Mã ${v.code}`)}
                     style={{
-                      border: 'none',
-                      background: '#E2E8F0',
-                      color: '#0F172A',
-                      padding: '3px 8px',
-                      borderRadius: '4px',
+                      border: '1px solid var(--border)',
+                      background: '#FFFFFF',
+                      color: 'var(--zinc-800)',
+                      padding: '2px 8px',
+                      borderRadius: 'var(--radius-sm)',
                       cursor: 'pointer',
                       fontSize: '11px',
-                      fontWeight: 700,
+                      fontWeight: 600,
                       transition: 'all 0.15s',
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#0284C7'; e.currentTarget.style.color = '#FFF'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = '#E2E8F0'; e.currentTarget.style.color = '#0F172A'; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--zinc-900)'; e.currentTarget.style.color = '#FFF'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = '#FFFFFF'; e.currentTarget.style.color = 'var(--zinc-800)'; }}
                   >
                     Lấy mã
                   </button>
@@ -551,16 +584,16 @@ export default function CustomerHomePage() {
         <section id="tour-list-section" style={{ maxWidth: '1280px', margin: '0 auto 60px', padding: '0 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
             <div>
-              <span style={{ fontSize: '11.5px', fontWeight: 800, color: '#005BAA', textTransform: 'uppercase', letterSpacing: '1px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--zinc-500)', textTransform: 'uppercase', letterSpacing: '1px' }}>
                 HÀNH TRÌNH CHỌN LỌC
               </span>
-              <h2 style={{ fontSize: '26px', fontWeight: 900, color: '#0F172A', marginTop: '2px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--zinc-900)', marginTop: '2px', letterSpacing: '-0.3px' }}>
                 Tour Du Lịch Đang Mở Bán
               </h2>
             </div>
 
             {/* CATEGORY TABS */}
-            <div style={{ display: 'flex', gap: '8px', background: '#FFFFFF', padding: '6px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+            <div style={{ display: 'flex', gap: '4px', background: '#FFFFFF', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
               {[
                 { id: 'ALL', label: 'Tất cả tour' },
                 { id: 'MIEN_TRUNG', label: 'Miền Trung' },
@@ -571,12 +604,12 @@ export default function CustomerHomePage() {
                   key={c.id}
                   onClick={() => setCategoryFilter(c.id)}
                   style={{
-                    padding: '8px 16px',
-                    borderRadius: '8px',
+                    padding: '7px 14px',
+                    borderRadius: 'var(--radius-sm)',
                     border: 'none',
-                    background: categoryFilter === c.id ? '#005BAA' : 'transparent',
-                    color: categoryFilter === c.id ? '#FFFFFF' : '#475569',
-                    fontWeight: 800,
+                    background: categoryFilter === c.id ? 'var(--zinc-900)' : 'transparent',
+                    color: categoryFilter === c.id ? '#FFFFFF' : 'var(--zinc-600)',
+                    fontWeight: 600,
                     fontSize: '13px',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
@@ -591,7 +624,7 @@ export default function CustomerHomePage() {
           <ApiNotice error={tours.error} />
 
           {/* TOUR CARDS GRID */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' }}>
             {filteredTours.map((t) => {
               const nearestLich = t.LichKhoiHanh?.[0];
               const remainSeats = nearestLich ? nearestLich.SoChoToiDa - nearestLich.SoChoDaDat : 15;
@@ -601,75 +634,84 @@ export default function CustomerHomePage() {
                   key={t.TourID}
                   style={{
                     background: '#FFFFFF',
-                    borderRadius: '16px',
+                    borderRadius: 'var(--radius-lg)',
                     overflow: 'hidden',
-                    border: '1px solid #E2E8F0',
+                    border: '1px solid var(--border)',
                     display: 'flex',
                     flexDirection: 'column',
-                    boxShadow: '0 4px 14px rgba(15,23,42,0.04)',
-                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    boxShadow: 'var(--shadow-xs)',
+                    transition: 'transform 0.15s, box-shadow 0.15s',
                   }}
                 >
                   {/* TOUR IMAGE */}
-                  <div style={{ position: 'relative', height: '210px', overflow: 'hidden' }}>
+                  <div style={{ position: 'relative', height: '200px', overflow: 'hidden' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={t.HinhAnhURL || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600'}
                       alt={t.TenTour}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />
-                    <div style={{ position: 'absolute', top: '12px', left: '12px', display: 'flex', gap: '6px' }}>
-                      <span style={{ background: '#005BAA', color: '#FFF', fontSize: '11px', fontWeight: 800, padding: '4px 10px', borderRadius: '6px', textTransform: 'uppercase' }}>
-                        ✈️ Bao gồm vé máy bay
+                    <div style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', gap: '6px' }}>
+                      <span style={{ background: 'rgba(15, 23, 42, 0.85)', color: '#FFF', fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: 'var(--radius-sm)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Plane size={11} strokeWidth={1.5} /> Bao gồm vé máy bay
                       </span>
                     </div>
-                    <div style={{ position: 'absolute', bottom: '10px', right: '12px', background: 'rgba(15,23,42,0.85)', color: '#FFF', fontSize: '11.5px', padding: '4px 10px', borderRadius: '6px', fontWeight: 700 }}>
-                      ⏳ {t.ThoiGian}
+                    <div style={{ position: 'absolute', bottom: '10px', right: '10px', background: 'rgba(15, 23, 42, 0.85)', color: '#FFF', fontSize: '11px', padding: '3px 8px', borderRadius: 'var(--radius-sm)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Clock size={11} strokeWidth={1.5} /> {t.ThoiGian}
                     </div>
                   </div>
 
                   {/* TOUR BODY */}
-                  <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Mã: {t.MaTour}</span>
-                      <span style={{ fontSize: '12px', color: '#B45309', fontWeight: 700 }}>⭐ 5.0 (Xuất sắc)</span>
+                  <div style={{ padding: '18px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '11.5px', color: 'var(--text-muted)', fontWeight: 500 }}>Mã: {t.MaTour}</span>
+                      <span style={{ fontSize: '12px', color: '#B45309', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Star size={12} strokeWidth={1.5} fill="#B45309" color="#B45309" /> 5.0 (Xuất sắc)
+                      </span>
                     </div>
 
-                    <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#0F172A', marginBottom: '10px', lineHeight: 1.35 }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', marginBottom: '10px', lineHeight: 1.35 }}>
                       {t.TenTour}
                     </h3>
 
-                    <div style={{ fontSize: '12.5px', color: '#475569', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div>📍 Khởi hành từ: <strong>{t.DiemKhoiHanh || 'TP. Hồ Chí Minh'}</strong> → <strong>{t.DiemDen}</strong></div>
-                      <div>📅 Ngày gần nhất: <strong>{nearestLich ? new Date(nearestLich.NgayKhoiHanh).toLocaleDateString('vi-VN') : '15/10/2026'}</strong></div>
-                      <div style={{ color: remainSeats <= 5 ? '#E11D48' : '#059669', fontWeight: 700 }}>
-                        🔥 Còn lại: <strong>{remainSeats} chỗ trống</strong>
+                    <div style={{ fontSize: '12px', color: 'var(--zinc-600)', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <MapPin size={12} strokeWidth={1.5} color="var(--zinc-500)" />
+                        <span>Khởi hành: <strong>{t.DiemKhoiHanh || 'TP. Hồ Chí Minh'}</strong> → <strong>{t.DiemDen}</strong></span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Calendar size={12} strokeWidth={1.5} color="var(--zinc-500)" />
+                        <span>Ngày gần nhất: <strong>{nearestLich ? new Date(nearestLich.NgayKhoiHanh).toLocaleDateString('vi-VN') : '15/10/2026'}</strong></span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: remainSeats <= 5 ? 'var(--rose-600)' : 'var(--emerald-600)', fontWeight: 600 }}>
+                        <Users size={12} strokeWidth={1.5} />
+                        <span>Còn lại: <strong>{remainSeats} chỗ trống</strong></span>
                       </div>
                     </div>
 
                     {/* PRICE & ACTION BUTTONS */}
-                    <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid #F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ marginTop: 'auto', paddingTop: '14px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <span style={{ fontSize: '11.5px', color: '#64748B', display: 'block' }}>Giá ưu đãi từ:</span>
-                        <div style={{ fontSize: '20px', fontWeight: 900, color: '#005BAA' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Giá từ:</span>
+                        <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--zinc-900)' }}>
                           {vnd(t.GiaNguoiLon)}
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '6px' }}>
                         <button
                           className="btn btn-outline btn-sm"
                           onClick={() => handleOpenDetail(t)}
-                          style={{ fontWeight: 700 }}
+                          style={{ padding: '6px 12px', fontSize: '12.5px' }}
                         >
                           Chi tiết
                         </button>
                         <button
                           className="btn btn-primary btn-sm"
                           onClick={() => handleOpenBooking(t)}
-                          style={{ background: '#005BAA', borderColor: '#005BAA', fontWeight: 800 }}
+                          style={{ padding: '6px 14px', fontSize: '12.5px', background: 'var(--zinc-900)', borderColor: 'var(--zinc-900)' }}
                         >
-                          Đặt Ngay
+                          Đặt ngay
                         </button>
                       </div>
                     </div>
@@ -686,18 +728,20 @@ export default function CustomerHomePage() {
       {/* ========================================================================= */}
       {selectedTour && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(4px)', zIndex: 1100,
+          position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)', zIndex: 1100,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
         }}>
-          <div className="card" style={{ maxWidth: '580px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: '18px', background: '#FFFFFF', padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #E2E8F0' }}>
+          <div style={{ maxWidth: '580px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', padding: '24px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: 900, color: '#0F172A', margin: 0 }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', margin: 0 }}>
                   Đăng Ký Tour Trực Tuyến
                 </h3>
-                <span style={{ fontSize: '12.5px', color: '#005BAA', fontWeight: 700 }}>{selectedTour.TenTour}</span>
+                <span style={{ fontSize: '12px', color: 'var(--zinc-600)', fontWeight: 500 }}>{selectedTour.TenTour}</span>
               </div>
-              <button className="btn btn-outline btn-sm" onClick={() => setSelectedTour(null)}>✕</button>
+              <button className="btn btn-outline btn-sm" onClick={() => setSelectedTour(null)} style={{ padding: '4px 8px' }}>
+                <X size={14} strokeWidth={1.5} />
+              </button>
             </div>
 
             {/* BƯỚC TIẾN TRÌNH */}
@@ -948,13 +992,13 @@ export default function CustomerHomePage() {
                   </div>
 
                   {voucherApplied && (
-                    <div style={{ fontSize: '12.5px', color: '#16A34A', fontWeight: 700, marginTop: '6px' }}>
-                      ✓ {voucherApplied}
+                    <div style={{ fontSize: '12.5px', color: 'var(--emerald-600)', fontWeight: 600, marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Check size={12} strokeWidth={2} /> <span>{voucherApplied}</span>
                     </div>
                   )}
                   {voucherError && (
-                    <div style={{ fontSize: '12.5px', color: '#DC2626', fontWeight: 600, marginTop: '6px' }}>
-                      ✕ {voucherError}
+                    <div style={{ fontSize: '12.5px', color: 'var(--rose-600)', fontWeight: 600, marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <X size={12} strokeWidth={2} /> <span>{voucherError}</span>
                     </div>
                   )}
                 </div>
@@ -971,7 +1015,7 @@ export default function CustomerHomePage() {
                       <strong>-{vnd(voucherDiscount)}</strong>
                     </div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 900, color: '#005BAA', paddingTop: '8px', borderTop: '1px dashed #CBD5E1' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 900, color: 'var(--zinc-900)', paddingTop: '8px', borderTop: '1px dashed #CBD5E1' }}>
                     <span>CẦN THANH TOÁN:</span>
                     <span>{vnd(finalTotal)}</span>
                   </div>
@@ -983,9 +1027,9 @@ export default function CustomerHomePage() {
                     className="btn btn-primary"
                     onClick={handleConfirmBooking}
                     disabled={bookingLoading}
-                    style={{ flex: 1, background: '#10B981', borderColor: '#10B981', fontWeight: 900, fontSize: '14.5px' }}
+                    style={{ flex: 1, background: 'var(--zinc-900)', borderColor: 'var(--zinc-900)', fontWeight: 700, fontSize: '13.5px' }}
                   >
-                    {bookingLoading ? 'Đang khởi tạo đơn...' : '🚀 XÁC NHẬN & THANH TOÁN NGAY'}
+                    {bookingLoading ? 'Đang khởi tạo đơn...' : 'Xác nhận & Thanh toán ngay'}
                   </button>
                 </div>
               </div>
@@ -999,15 +1043,29 @@ export default function CustomerHomePage() {
       {/* ========================================================================= */}
       {createdBooking && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)', zIndex: 1200,
+          position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', zIndex: 1200,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
         }}>
-          <div className="card" style={{ maxWidth: '500px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: '18px', background: '#FFFFFF', padding: '24px' }}>
+          <div style={{ maxWidth: '500px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', padding: '24px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
             <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-              <div style={{ fontSize: '36px', marginBottom: '4px' }}>🎉</div>
-              <h3 style={{ fontSize: '20px', fontWeight: 900, color: '#0F172A', margin: 0 }}>ĐẶT TOUR THÀNH CÔNG!</h3>
-              <p style={{ fontSize: '13px', color: '#64748B', margin: '4px 0 0' }}>
-                Mã đơn hàng: <strong style={{ color: '#005BAA', fontSize: '15px' }}>{createdBooking.MaDon}</strong>
+              <div style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--emerald-50)',
+                color: 'var(--emerald-600)',
+                display: 'grid',
+                placeItems: 'center',
+                margin: '0 auto 10px',
+                border: '1px solid var(--emerald-200)',
+              }}>
+                <CheckCircle2 size={24} strokeWidth={1.5} />
+              </div>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--zinc-900)', margin: 0, letterSpacing: '-0.3px' }}>
+                ĐẶT TOUR THÀNH CÔNG
+              </h3>
+              <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                Mã đơn hàng: <strong style={{ color: 'var(--zinc-900)', fontSize: '14px' }}>{createdBooking.MaDon}</strong>
               </p>
             </div>
 
@@ -1138,18 +1196,20 @@ export default function CustomerHomePage() {
 
       {/* MODAL CHI TIẾT TOUR NHANH */}
       {detailTour && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(4px)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="card" style={{ maxWidth: '640px', width: '100%', maxHeight: '90vh', overflowY: 'auto', borderRadius: '16px', background: '#FFFFFF', padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: 900, color: '#0F172A', margin: 0 }}>{detailTour.TenTour}</h3>
-              <button className="btn btn-outline btn-sm" onClick={() => setDetailTour(null)}>✕</button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ maxWidth: '640px', width: '100%', maxHeight: '90vh', overflowY: 'auto', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', padding: '24px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', margin: 0 }}>{detailTour.TenTour}</h3>
+              <button className="btn btn-outline btn-sm" onClick={() => setDetailTour(null)} style={{ padding: '4px 8px' }}>
+                <X size={14} strokeWidth={1.5} />
+              </button>
             </div>
-            <p style={{ fontSize: '14px', color: '#475569', lineHeight: 1.6 }}>{detailTour.MoTaChiTiet || 'Chương trình du lịch chất lượng cao của VietTour.'}</p>
+            <p style={{ fontSize: '13.5px', color: 'var(--zinc-600)', lineHeight: 1.6 }}>{detailTour.MoTaChiTiet || 'Chương trình du lịch chất lượng cao của VietTour.'}</p>
             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <Link href={`/portal/tours/${detailTour.TourID}`} className="btn btn-outline" style={{ fontWeight: 700 }}>
+              <Link href={`/portal/tours/${detailTour.TourID}`} className="btn btn-outline" style={{ fontWeight: 600, fontSize: '13px' }}>
                 Trang Chi Tiết Đầy Đủ
               </Link>
-              <button className="btn btn-primary" onClick={() => handleOpenBooking(detailTour)} style={{ background: '#005BAA', fontWeight: 800 }}>
+              <button className="btn btn-primary" onClick={() => handleOpenBooking(detailTour)} style={{ background: 'var(--zinc-900)', borderColor: 'var(--zinc-900)', fontWeight: 600, fontSize: '13px' }}>
                 Đặt Tour Này
               </button>
             </div>

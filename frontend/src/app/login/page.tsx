@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
+import { firstError, registerSchema } from '@/lib/validations';
+import { X } from 'lucide-react';
 
 type AuthScreen = 'login' | 'register' | 'forgot_email' | 'forgot_reset';
 
@@ -71,6 +73,11 @@ export default function LoginPage() {
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const invalid = firstError(registerSchema, { hoTen: regName, email: regEmail, phone: regPhone, password: regPassword });
+    if (invalid) {
+      setErrorMessage(invalid);
+      return;
+    }
     setLoading(true);
     setErrorMessage(null);
     try {
@@ -151,57 +158,59 @@ export default function LoginPage() {
       {toastMessage && (
         <div style={{
           position: 'fixed',
-          top: '24px',
-          right: '24px',
-          background: '#10B981',
+          top: '20px',
+          right: '20px',
+          background: '#059669',
           color: '#FFFFFF',
-          padding: '14px 22px',
-          borderRadius: '10px',
-          boxShadow: '0 10px 25px -5px rgba(16, 185, 129, 0.3)',
+          padding: '10px 16px',
+          borderRadius: '6px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           display: 'flex',
           alignItems: 'center',
-          gap: '12px',
+          gap: '10px',
           zIndex: 1000,
-          fontSize: '14px',
+          fontSize: '13px',
           fontWeight: 600
         }}>
           <span>{toastMessage}</span>
-          <button onClick={() => setToastMessage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FFFFFF', fontSize: '16px', marginLeft: '12px' }}>✕</button>
+          <button onClick={() => setToastMessage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FFFFFF', display: 'flex', alignItems: 'center', padding: 0 }}>
+            <X size={15} strokeWidth={2} />
+          </button>
         </div>
       )}
 
-      <div style={{ width: '100%', maxWidth: '420px' }}>
-        {/* LOGO & TITLE HEADING (ĐÃ ĐỔI TÊN THÀNH VIETTOUR, KHÔNG CÓ CHỮ ERP) */}
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+      <div style={{ width: '100%', maxWidth: '400px' }}>
+        {/* LOGO & TITLE HEADING */}
+        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <div style={{
-            width: '64px',
-            height: '64px',
-            margin: '0 auto 14px',
-            background: 'linear-gradient(135deg, #0D6EFD 0%, #1D4ED8 100%)',
-            color: '#FFFFFF',
-            borderRadius: '16px',
+            width: '48px',
+            height: '48px',
+            margin: '0 auto 12px',
+            background: '#09090B',
+            color: '#FAFAFA',
+            borderRadius: '8px',
             display: 'grid',
             placeItems: 'center',
-            fontSize: '24px',
-            fontWeight: 900,
-            boxShadow: '0 8px 20px rgba(13, 110, 253, 0.25)',
+            fontSize: '18px',
+            fontWeight: 800,
+            border: '1px solid #27272A',
             letterSpacing: '-0.5px'
           }}>
             VT
           </div>
-          <h1 style={{ fontSize: '22px', fontWeight: 900, color: '#0F172A', lineHeight: 1.2, margin: '0 0 6px', letterSpacing: '-0.3px' }}>
+          <h1 style={{ fontSize: '20px', fontWeight: 700, color: '#09090B', lineHeight: 1.2, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
             VietTour
           </h1>
-          <p style={{ fontSize: '13px', color: '#64748B', margin: 0 }}>
-            Hệ thống Quản lý & Tạo lập Cơ sở dữ liệu Tour Du lịch
+          <p style={{ fontSize: '12.5px', color: '#71717A', margin: 0 }}>
+            Hệ thống Quản trị & Điều hành Tour Du lịch
           </p>
         </div>
 
         {/* AUTH CARD */}
         <div className="card" style={{
-          padding: '32px 28px',
-          borderRadius: '16px',
-          border: '1px solid #E2E8F0',
+          padding: '28px 24px',
+          borderRadius: '8px',
+          border: '1px solid #E4E4E7',
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01)',
           background: '#FFFFFF'
         }}>

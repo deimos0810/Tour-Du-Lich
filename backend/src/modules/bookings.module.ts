@@ -1,6 +1,10 @@
-import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoundException, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoundException, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.module.js';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../common/guards/roles.guard.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
+import { ExportModule, TicketMailService } from './export.module.js';
 
 // PHÂN HỆ 3: Lịch khởi hành  |  PHÂN HỆ 4: Booking & đặt cọc
 @Injectable()
@@ -31,13 +35,15 @@ export class DeparturesService {
 export class DeparturesController {
   constructor(private service: DeparturesService) {}
   @Get() findAll(@Query('trangThai') t?: string) { return this.service.findAll(t); }
-  @Post() create(@Body() b: Prisma.LichKhoiHanhUncheckedCreateInput) { return this.service.create(b); }
-  @Patch(':id') update(@Param('id', ParseIntPipe) id: number, @Body() b: Prisma.LichKhoiHanhUncheckedUpdateInput) { return this.service.update(id, b); }
+  @Post() @UseGuards(JwtAuthGuard, RolesGuard) @Roles('Admin', 'Dieu hanh')
+  create(@Body() b: Prisma.LichKhoiHanhUncheckedCreateInput) { return this.service.create(b); }
+  @Patch(':id') @UseGuards(JwtAuthGuard, RolesGuard) @Roles('Admin', 'Dieu hanh')
+  update(@Param('id', ParseIntPipe) id: number, @Body() b: Prisma.LichKhoiHanhUncheckedUpdateInput) { return this.service.update(id, b); }
 }
 
 @Injectable()
 export class BookingsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private mail: TicketMailService) {}
 
   findAll(q: { trangThai?: string; search?: string }) {
     return this.prisma.donDatTour.findMany({
@@ -69,6 +75,7 @@ export class BookingsService {
   /** Ghi nhận giao dịch thanh toán/đặt cọc và cập nhật trạng thái đơn trong 1 transaction. */
   async addPayment(id: number, body: { SoTien: number; HinhThucTT: string; NhanVienID?: number }) {
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT donhangid FROM dondattour WHERE donhangid = ${id} FOR UPDATE`;
       const don = await tx.donDatTour.findUniqueOrThrow({ where: { DonHangID: id } });
       if (don.TrangThaiDon === 'Da huy') throw new BadRequestException('Đơn đã hủy');
       const daThu = Number(don.TienCoc) + body.SoTien;
@@ -88,14 +95,24 @@ export class BookingsService {
     });
   }
 
-  /** Xác nhận thanh toán VietQR chuyển khoản ngân hàng 24/7 tức thì */
+  /** Xác nhận thanh toán VietQR chuyển khoản ngân hàng 24/7 tức thì (kèm gửi email vé điện tử QR) */
   async confirmPayment(id: number, body: { hinhThucTT?: string; maGiaoDich?: string; ghiChu?: string }) {
+    const result = await this.applyPayment(id, body);
+    if (!result.alreadyPaid) void this.mail.sendTicketEmail(result.don.MaDon);
+    return { message: result.message, don: result.don };
+  }
+
+  private async applyPayment(id: number, body: { hinhThucTT?: string; maGiaoDich?: string; ghiChu?: string }) {
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT donhangid FROM dondattour WHERE donhangid = ${id} FOR UPDATE`;
       const don = await tx.donDatTour.findUniqueOrThrow({
         where: { DonHangID: id },
         include: { LichKhoiHanh: { include: { Tour: true } } },
       });
       if (don.TrangThaiDon === 'Da huy') throw new BadRequestException('Đơn hàng này đã bị hủy');
+      if (don.TrangThaiDon === 'Da thanh toan') {
+        return { message: 'Đơn hàng đã được thanh toán trước đó', don, alreadyPaid: true };
+      }
 
       const phaiThu = Number(don.TongTien) - Number(don.GiamGia);
       const validMethods = ['VNPay', 'Chuyen khoan', 'Tien mat', 'MoMo'];
@@ -130,6 +147,7 @@ export class BookingsService {
       return {
         message: 'Xác nhận thanh toán thành công!',
         don: updatedDon,
+        alreadyPaid: false,
       };
     });
   }
@@ -235,9 +253,13 @@ export class BookingsService {
     };
   }
 
-  /** Hủy đơn: hoàn lại số chỗ cho lịch khởi hành. */
+  /** Hủy đơn: hoàn lại số chỗ cho lịch khởi hành (khóa hàng để tránh hủy trùng làm sai số chỗ). */
   async cancel(id: number) {
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT donhangid FROM dondattour WHERE donhangid = ${id} FOR UPDATE`;
+      const current = await tx.donDatTour.findUniqueOrThrow({ where: { DonHangID: id } });
+      if (current.TrangThaiDon === 'Da huy') throw new BadRequestException('Đơn đã được hủy trước đó');
+      await tx.$queryRaw`SELECT lichid FROM lichkhoihanh WHERE lichid = ${current.LichID} FOR UPDATE`;
       const don = await tx.donDatTour.update({ where: { DonHangID: id }, data: { TrangThaiDon: 'Da huy' } });
       await tx.lichKhoiHanh.update({
         where: { LichID: don.LichID },
@@ -252,22 +274,31 @@ export class BookingsService {
   }
 }
 
+const STAFF = ['Admin', 'Dieu hanh', 'Ke toan'] as const;
+
 @Controller('bookings')
 export class BookingsController {
   constructor(private service: BookingsService) {}
 
-  @Get() findAll(@Query() q: Record<string, string>) { return this.service.findAll(q); }
+  @Get() @UseGuards(JwtAuthGuard, RolesGuard) @Roles(...STAFF)
+  findAll(@Query() q: Record<string, string>) { return this.service.findAll(q); }
+  // Công khai: mã đơn đóng vai trò mã tra cứu vé
   @Get('ticket/:maDon') getTicket(@Param('maDon') maDon: string) { return this.service.getTicket(maDon); }
+  // Công khai: khách xem trước mã giảm giá
   @Post('voucher/validate') validateVoucher(@Body() b: { maKhuyenMai: string; tongTien: number }) {
     return this.service.validateVoucher(b.maKhuyenMai, b.tongTien);
   }
-  @Post('checkin/:chiTietId') checkInPassenger(@Param('chiTietId', ParseIntPipe) chiTietId: number) {
+  @Post('checkin/:chiTietId') @UseGuards(JwtAuthGuard, RolesGuard) @Roles('Dieu hanh', 'HDV')
+  checkInPassenger(@Param('chiTietId', ParseIntPipe) chiTietId: number) {
     return this.service.checkInPassenger(chiTietId);
   }
-  @Get(':id') findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOne(id); }
-  @Post(':id/payments') pay(@Param('id', ParseIntPipe) id: number, @Body() b: { SoTien: number; HinhThucTT: string; NhanVienID?: number }) {
+  @Get(':id') @UseGuards(JwtAuthGuard, RolesGuard) @Roles(...STAFF)
+  findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOne(id); }
+  @Post(':id/payments') @UseGuards(JwtAuthGuard, RolesGuard) @Roles('Ke toan')
+  pay(@Param('id', ParseIntPipe) id: number, @Body() b: { SoTien: number; HinhThucTT: string; NhanVienID?: number }) {
     return this.service.addPayment(id, b);
   }
+  // Luồng thanh toán sandbox/VietQR của khách (chưa có webhook ngân hàng) nên giữ công khai
   @Post(':id/confirm-payment') confirmPayment(
     @Param('id', ParseIntPipe) id: number,
     @Body() b: { hinhThucTT?: string; maGiaoDich?: string; ghiChu?: string },
@@ -280,9 +311,11 @@ export class BookingsController {
   ) {
     return this.service.confirmByMaDon(maDon, b);
   }
-  @Post(':id/cancel') cancel(@Param('id', ParseIntPipe) id: number) { return this.service.cancel(id); }
-  @Patch(':id/status') status(@Param('id', ParseIntPipe) id: number, @Body('TrangThaiDon') s: string) { return this.service.updateStatus(id, s); }
+  @Post(':id/cancel') @UseGuards(JwtAuthGuard, RolesGuard) @Roles(...STAFF)
+  cancel(@Param('id', ParseIntPipe) id: number) { return this.service.cancel(id); }
+  @Patch(':id/status') @UseGuards(JwtAuthGuard, RolesGuard) @Roles(...STAFF)
+  status(@Param('id', ParseIntPipe) id: number, @Body('TrangThaiDon') s: string) { return this.service.updateStatus(id, s); }
 }
 
-@Module({ controllers: [DeparturesController, BookingsController], providers: [DeparturesService, BookingsService] })
+@Module({ imports: [ExportModule], controllers: [DeparturesController, BookingsController], providers: [DeparturesService, BookingsService] })
 export class BookingsModule {}

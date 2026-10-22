@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { UserSession } from '@/context/AuthContext';
+import { LayoutDashboard, User, Package, Heart, KeyRound, LogOut } from 'lucide-react';
 
 type Props = {
   user: UserSession;
@@ -9,55 +10,60 @@ type Props = {
 };
 
 export default function CustomerAccountDropdown({ user, onLogoutClick, onClose }: Props) {
+  const isStaffOrAdmin =
+    user.roles?.some((r: string) => ['Admin', 'Dieu hanh', 'Ke toan', 'HDV'].includes(r)) ||
+    ['Admin', 'Dieu hanh', 'Ke toan', 'HDV'].includes(user.primaryRole || '');
+
   return (
-    <div style={{
-      position: 'absolute',
-      top: 'calc(100% + 8px)',
-      right: 0,
-      width: '260px',
-      background: '#FFFFFF',
-      borderRadius: '12px',
-      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)',
-      border: '1px solid #E2E8F0',
-      zIndex: 50,
-      overflow: 'hidden'
-    }}>
+    <div
+      style={{
+        position: 'absolute',
+        top: 'calc(100% + 8px)',
+        right: 0,
+        width: '260px',
+        background: '#FFFFFF',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-md)',
+        border: '1px solid var(--border)',
+        zIndex: 50,
+        overflow: 'hidden',
+      }}
+    >
       {/* HEADER TÊN VÀ EMAIL */}
-      <div style={{ padding: '16px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-        <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '14px', marginBottom: '2px' }}>
+      <div style={{ padding: '14px 16px', background: 'var(--zinc-50)', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ fontWeight: 600, color: 'var(--zinc-900)', fontSize: '13.5px', marginBottom: '2px' }}>
           {user.name}
         </div>
-        <div style={{ fontSize: '12px', color: '#64748B', wordBreak: 'break-all' }}>
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
           {user.email}
         </div>
         <div style={{ marginTop: '6px' }}>
-          <span className="badge badge-info" style={{ fontSize: '10.5px' }}>Khách hàng thân thiết</span>
+          <span className="badge badge-default" style={{ fontSize: '10.5px' }}>
+            Khách hàng thân thiết
+          </span>
         </div>
       </div>
 
       {/* MENU ITEMS */}
       <div style={{ padding: '6px 0' }}>
-        {(user.roles?.some((r: string) => ['Admin', 'Dieu hanh', 'Ke toan', 'HDV'].includes(r)) || ['Admin', 'Dieu hanh', 'Ke toan', 'HDV'].includes(user.primaryRole || '')) && (
+        {isStaffOrAdmin && (
           <Link
             href="/"
             onClick={onClose}
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              padding: '10px 16px',
-              fontSize: '13.5px',
-              color: '#0284C7',
-              background: '#F0F9FF',
+              gap: '10px',
+              padding: '9px 16px',
+              fontSize: '13px',
+              color: 'var(--zinc-900)',
+              background: 'var(--zinc-100)',
               textDecoration: 'none',
-              fontWeight: 700,
-              borderBottom: '1px solid #E0F2FE',
-              transition: 'background 0.2s',
+              fontWeight: 600,
+              borderBottom: '1px solid var(--border)',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = '#E0F2FE')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = '#F0F9FF')}
           >
-            <span>⚙️</span>
+            <LayoutDashboard size={14} strokeWidth={1.5} />
             <span>Dashboard Quản Trị</span>
           </Link>
         )}
@@ -66,76 +72,80 @@ export default function CustomerAccountDropdown({ user, onLogoutClick, onClose }
           href="/portal/account"
           onClick={onClose}
           style={{
-            display: 'block',
-            padding: '10px 16px',
-            fontSize: '13.5px',
-            color: '#1E293B',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '9px 16px',
+            fontSize: '13px',
+            color: 'var(--zinc-700)',
             textDecoration: 'none',
             fontWeight: 500,
-            transition: 'background 0.2s'
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          className="hover:bg-zinc-50"
         >
-          Thông tin tài khoản
+          <User size={14} strokeWidth={1.5} />
+          <span>Thông tin tài khoản</span>
         </Link>
 
         <Link
           href="/portal/my-bookings"
           onClick={onClose}
           style={{
-            display: 'block',
-            padding: '10px 16px',
-            fontSize: '13.5px',
-            color: '#1E293B',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '9px 16px',
+            fontSize: '13px',
+            color: 'var(--zinc-700)',
             textDecoration: 'none',
             fontWeight: 500,
-            transition: 'background 0.2s'
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          className="hover:bg-zinc-50"
         >
-          Đơn đặt tour của tôi
+          <Package size={14} strokeWidth={1.5} />
+          <span>Đơn đặt tour của tôi</span>
         </Link>
 
         <Link
           href="/portal/favorites"
           onClick={onClose}
           style={{
-            display: 'block',
-            padding: '10px 16px',
-            fontSize: '13.5px',
-            color: '#1E293B',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '9px 16px',
+            fontSize: '13px',
+            color: 'var(--zinc-700)',
             textDecoration: 'none',
             fontWeight: 500,
-            transition: 'background 0.2s'
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          className="hover:bg-zinc-50"
         >
-          Tour yêu thích
+          <Heart size={14} strokeWidth={1.5} />
+          <span>Tour yêu thích</span>
         </Link>
 
         <Link
           href="/portal/account/change-password"
           onClick={onClose}
           style={{
-            display: 'block',
-            padding: '10px 16px',
-            fontSize: '13.5px',
-            color: '#1E293B',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '9px 16px',
+            fontSize: '13px',
+            color: 'var(--zinc-700)',
             textDecoration: 'none',
             fontWeight: 500,
-            transition: 'background 0.2s'
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#F1F5F9')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          className="hover:bg-zinc-50"
         >
-          Đổi mật khẩu
+          <KeyRound size={14} strokeWidth={1.5} />
+          <span>Đổi mật khẩu</span>
         </Link>
       </div>
 
-      <div style={{ borderTop: '1px solid #E2E8F0', padding: '6px 0' }}>
+      <div style={{ borderTop: '1px solid var(--border)', padding: '4px 0' }}>
         <button
           onClick={() => {
             onClose();
@@ -143,20 +153,21 @@ export default function CustomerAccountDropdown({ user, onLogoutClick, onClose }
           }}
           style={{
             width: '100%',
-            display: 'block',
-            padding: '10px 16px',
-            fontSize: '13.5px',
-            color: '#DC2626',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '9px 16px',
+            fontSize: '13px',
+            color: 'var(--rose-600)',
             background: 'none',
             border: 'none',
-            fontWeight: 600,
+            fontWeight: 500,
             cursor: 'pointer',
-            textAlign: 'left'
+            textAlign: 'left',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#FEF2F2')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         >
-          Đăng xuất
+          <LogOut size={14} strokeWidth={1.5} />
+          <span>Đăng xuất</span>
         </button>
       </div>
     </div>

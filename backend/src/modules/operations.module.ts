@@ -1,6 +1,9 @@
-import { BadRequestException, Body, Controller, Get, Injectable, Module, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Injectable, Module, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.module.js';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../common/guards/roles.guard.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
 
 @Injectable()
 export class OperationsService {
@@ -112,6 +115,8 @@ export class OperationsService {
 }
 
 @Controller()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('Dieu hanh', 'Ke toan')
 export class OperationsController {
   constructor(private s: OperationsService) {}
 
@@ -125,9 +130,9 @@ export class OperationsController {
   @Post('suppliers') createSupplier(@Body() b: Prisma.NhaCungCapCreateInput) { return this.s.createSupplier(b); }
   @Get('service-orders') orders(@Query('lichId') l?: string) { return this.s.serviceOrders(l ? Number(l) : undefined); }
 
-  @Get('settlements') settlements() { return this.s.settlements(); }
-  @Post('settlements') createSettlement(@Body() b: { LichID: number; NhanVienLapID: number }) { return this.s.createSettlement(b.LichID, b.NhanVienLapID); }
-  @Patch('settlements/:id/approve') approve(@Param('id', ParseIntPipe) id: number, @Body('TrangThaiDuyet') t: string) { return this.s.approveSettlement(id, t ?? 'Da phe duyet'); }
+  @Get('settlements') @Roles('Ke toan') settlements() { return this.s.settlements(); }
+  @Post('settlements') @Roles('Ke toan') createSettlement(@Body() b: { LichID: number; NhanVienLapID: number }) { return this.s.createSettlement(b.LichID, b.NhanVienLapID); }
+  @Patch('settlements/:id/approve') @Roles('Admin') approve(@Param('id', ParseIntPipe) id: number, @Body('TrangThaiDuyet') t: string) { return this.s.approveSettlement(id, t ?? 'Da phe duyet'); }
 }
 
 @Module({ controllers: [OperationsController], providers: [OperationsService] })
