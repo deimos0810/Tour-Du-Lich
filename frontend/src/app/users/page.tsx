@@ -4,6 +4,7 @@ import Icon from '@/components/Icon';
 import { api, useApi } from '@/lib/api';
 import { ApiNotice, EmptyRow, date } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
+import { KeyRound, Lock, UserPlus, Award, X } from 'lucide-react';
 
 type UserAccount = {
   TaiKhoanID: number;
@@ -320,17 +321,21 @@ export default function UsersPage() {
           <div
             style={{
               background: '#FFFFFF',
-              borderRadius: '12px',
+              borderRadius: '8px',
+              border: '1px solid #E4E4E7',
               maxWidth: '480px',
               width: '100%',
               padding: '24px',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
-              🔑 Phân quyền cho: {editingRoleUser.HoTen}
-            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <KeyRound size={18} strokeWidth={1.5} style={{ color: '#09090B' }} />
+              <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#09090B', margin: 0 }}>
+                Phân quyền cho: {editingRoleUser.HoTen}
+              </h2>
+            </div>
             <p style={{ fontSize: '12.5px', color: '#64748B', marginBottom: '16px' }}>
               Email: <strong>{editingRoleUser.Email}</strong>
             </p>
@@ -401,17 +406,21 @@ export default function UsersPage() {
           <div
             style={{
               background: '#FFFFFF',
-              borderRadius: '12px',
+              borderRadius: '8px',
+              border: '1px solid #E4E4E7',
               maxWidth: '420px',
               width: '100%',
               padding: '24px',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
-              🔒 Đặt lại mật khẩu
-            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <Lock size={18} strokeWidth={1.5} style={{ color: '#09090B' }} />
+              <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#09090B', margin: 0 }}>
+                Đặt lại mật khẩu
+              </h2>
+            </div>
             <p style={{ fontSize: '12.5px', color: '#64748B', marginBottom: '16px' }}>
               Cấp mật khẩu mới cho tài khoản <strong>{resetPwUser.Email}</strong>
             </p>
@@ -463,27 +472,31 @@ export default function UsersPage() {
           <div
             style={{
               background: '#FFFFFF',
-              borderRadius: '12px',
+              borderRadius: '8px',
+              border: '1px solid #E4E4E7',
               maxWidth: '560px',
               width: '100%',
               padding: '24px',
               maxHeight: '90vh',
               overflowY: 'auto',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                👤 Thêm tài khoản nhân viên mới
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <UserPlus size={18} strokeWidth={1.5} style={{ color: '#09090B' }} />
+                <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#09090B', margin: 0 }}>
+                  Thêm tài khoản nhân viên mới
+                </h2>
+              </div>
               <button
                 type="button"
                 className="icon-btn"
                 onClick={() => setShowAddModal(false)}
-                style={{ border: 'none', background: '#F1F5F9', borderRadius: '50%' }}
+                style={{ border: '1px solid #E4E4E7', background: '#FFFFFF', borderRadius: '6px', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
               >
-                ✕
+                <X size={14} strokeWidth={2} />
               </button>
             </div>
 
@@ -568,8 +581,9 @@ export default function UsersPage() {
 
               {staffForm.vaiTro === 'HDV' && (
                 <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '8px', border: '1px solid #E2E8F0', marginBottom: '16px' }}>
-                  <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#0D6EFD', marginBottom: '10px' }}>
-                    🚩 Thông tin nghiệp vụ Hướng dẫn viên
+                  <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#09090B', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Award size={15} strokeWidth={1.5} />
+                    <span>Thông tin nghiệp vụ Hướng dẫn viên</span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '10px' }}>
                     <div>

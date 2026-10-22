@@ -1,4 +1,10 @@
-import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoundException, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoundException, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../common/guards/roles.guard.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
+import type { JwtPayload } from '../common/jwt.config.js';
+import { createMailTransporter } from '../common/mailer.js';
 import { Prisma } from '@prisma/client';
 import * as nodemailer from 'nodemailer';
 import { PrismaService } from '../prisma/prisma.module.js';
@@ -11,7 +17,7 @@ const otpStore = new Map<string, { code: string; expiresAt: number }>();
 export class AuthService {
   private transporter: nodemailer.Transporter;
 
-  constructor(private prisma: PrismaService) {
+  constructor(private prisma: PrismaService, private jwt: JwtService) {
     // Cấu hình Nodemailer cho Gmail SMTP
     this.transporter = nodemailer.createTransport({
       host: process.env.MAIL_HOST || 'smtp.gmail.com',
@@ -102,8 +108,17 @@ export class AuthService {
       redirectUrl = '/departures';
     }
 
+    const payload: JwtPayload = {
+      sub: tk.TaiKhoanID,
+      email: tk.Email,
+      roles,
+      primaryRole,
+      customerId: tk.KhachHang?.KhachHangID || null,
+      employeeId: tk.NhanVien?.NhanVienID || null,
+    };
+
     return {
-      token: `jwt-session-${tk.TaiKhoanID}-${Date.now()}`,
+      token: await this.jwt.signAsync(payload),
       user: {
         id: tk.TaiKhoanID,
         email: tk.Email,
@@ -119,17 +134,7 @@ export class AuthService {
   }
 
   private getTransporter() {
-    const mailUser = (process.env.MAIL_USER || 'luongthanh1152011@gmail.com').trim();
-    const mailPass = (process.env.MAIL_PASS || 'dvrjdhcvhqrymsvs').replace(/\s+/g, '');
-    return nodemailer.createTransport({
-      host: process.env.MAIL_HOST || 'smtp.gmail.com',
-      port: Number(process.env.MAIL_PORT || 587),
-      secure: false, // 587 uses STARTTLS
-      auth: {
-        user: mailUser,
-        pass: mailPass,
-      },
-    });
+    return createMailTransporter();
   }
 
   /** Gửi mã OTP xác thực khôi phục mật khẩu qua Gmail */
@@ -263,6 +268,11 @@ export class AuthService {
       throw new BadRequestException('Đơn đặt tour cần ít nhất 1 người lớn');
     }
     return this.prisma.$transaction(async (tx) => {
+      // Khóa hàng (row-level lock) của lịch khởi hành: các giao dịch đặt tour đồng thời sẽ xếp hàng chờ,
+      // đảm bảo kiểm tra số chỗ + cập nhật SoChoDaDat là tuần tự (chống overbooking / race condition).
+      const locked = await tx.$queryRaw<Array<{ lichid: number }>>`SELECT lichid FROM lichkhoihanh WHERE lichid = ${dto.lichId} FOR UPDATE`;
+      if (locked.length === 0) throw new NotFoundException('Không tìm thấy lịch khởi hành!');
+
       const lich = await tx.lichKhoiHanh.findUniqueOrThrow({
         where: { LichID: dto.lichId },
         include: { Tour: true },
@@ -279,7 +289,7 @@ export class AuthService {
       const giaNL = Number(lich.GiaTourKhuyenMai || lich.Tour.GiaNguoiLon);
       const giaTE = Number(lich.Tour.GiaTreEm);
       const tongTien = giaNL * dto.soLuongNguoiLon + giaTE * dto.soLuongTreEm;
-      const maDon = `BK-${Date.now().toString().slice(-6)}`;
+      const maDon = `BK-${Date.now().toString().slice(-6)}${Math.floor(10 + Math.random() * 90)}`;
 
       // Kiểm tra và áp dụng mã khuyến mãi nếu có
       let giamGia = 0;
@@ -394,7 +404,9 @@ export class AuthController {
   }
 
   @Post('customer-booking')
-  createBooking(@Body() body: {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Khach hang')
+  createBooking(@Req() req: { user: JwtPayload }, @Body() body: {
     khachHangId: number;
     lichId: number;
     soLuongNguoiLon: number;
@@ -409,7 +421,7 @@ export class AuthController {
       loaiKhach?: string;
     }>;
   }) {
-    return this.service.createBookingCustomer(body);
+    return this.service.createBookingCustomer({ ...body, khachHangId: req.user.customerId ?? body.khachHangId });
   }
 }
 

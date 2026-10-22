@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useApi } from '@/lib/api';
 import { ApiNotice, EmptyRow, Status, vnd, date } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
+import { Users, DollarSign, FileText, Printer, Star, X } from 'lucide-react';
 
 type Guide = {
   HDVID: number;
@@ -76,14 +77,18 @@ export default function GuidesPage() {
           <button
             className={`btn ${activeTab === 'LIST' ? 'btn-primary' : 'btn-outline'}`}
             onClick={() => setActiveTab('LIST')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
           >
-            📋 Danh sách HDV
+            <Users size={14} strokeWidth={1.5} />
+            <span>Danh sách HDV</span>
           </button>
           <button
             className={`btn ${activeTab === 'PAYROLL' ? 'btn-primary' : 'btn-outline'}`}
             onClick={() => setActiveTab('PAYROLL')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
           >
-            💰 Bảng tính công HDV
+            <DollarSign size={14} strokeWidth={1.5} />
+            <span>Bảng tính công HDV</span>
           </button>
         </div>
       </div>
@@ -150,13 +155,14 @@ export default function GuidesPage() {
             }}
           >
             <div>
-              <div style={{ fontWeight: 800, color: '#1E40AF', fontSize: '14px', marginBottom: '4px' }}>
-                📜 Quy chế tính thù lao Hướng dẫn viên (ERP VietTour)
+              <div style={{ fontWeight: 700, color: '#09090B', fontSize: '13px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FileText size={15} strokeWidth={1.5} />
+                <span>Quy chế tính thù lao Hướng dẫn viên (ERP VietTour)</span>
               </div>
-              <div style={{ fontSize: '12.5px', color: '#1E3A8A' }}>
+              <div style={{ fontSize: '12px', color: '#52525B', lineHeight: 1.6 }}>
                 • Đơn giá ngày công: <strong>800.000đ / ngày</strong> · Phụ cấp trách nhiệm đoàn: <strong>300.000đ / tour</strong>
                 <br />
-                • Thưởng chất lượng dịch vụ: <strong>+500.000đ</strong> (Rating ≥ 4.5★) hoặc <strong>+200.000đ</strong> (Rating ≥ 4.0★)
+                • Thưởng chất lượng dịch vụ: <strong>+500.000đ</strong> (Rating ≥ 4.5/5.0) hoặc <strong>+200.000đ</strong> (Rating ≥ 4.0/5.0)
               </div>
             </div>
 
@@ -256,22 +262,26 @@ export default function GuidesPage() {
           <div
             style={{
               background: '#FFFFFF',
-              borderRadius: '12px',
+              borderRadius: '8px',
+              border: '1px solid #E4E4E7',
               maxWidth: '750px',
               width: '100%',
               padding: '24px',
               maxHeight: '90vh',
               overflowY: 'auto',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                  📄 Bảng kê chi tiết công tác phí HDV
-                </h2>
-                <p style={{ fontSize: '13px', color: '#64748B', margin: '2px 0 0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FileText size={18} strokeWidth={1.5} style={{ color: '#09090B' }} />
+                  <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#09090B', margin: 0 }}>
+                    Bảng kê chi tiết công tác phí HDV
+                  </h2>
+                </div>
+                <p style={{ fontSize: '12.5px', color: '#71717A', margin: '2px 0 0' }}>
                   Nhân sự: <strong>{detailGuide.HoTen}</strong> ({detailGuide.SoTheHDV}) — Kỳ {selectedMonth}
                 </p>
               </div>
@@ -279,9 +289,9 @@ export default function GuidesPage() {
                 type="button"
                 className="icon-btn"
                 onClick={() => setDetailGuide(null)}
-                style={{ border: 'none', background: '#F1F5F9', borderRadius: '50%' }}
+                style={{ border: '1px solid #E4E4E7', background: '#FFFFFF', borderRadius: '6px', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
               >
-                ✕
+                <X size={14} strokeWidth={2} />
               </button>
             </div>
 
@@ -314,11 +324,12 @@ export default function GuidesPage() {
                         <td>
                           {t.diemDanhGia !== null ? (
                             <div>
-                              <span style={{ color: '#F59E0B', fontWeight: 700 }}>
-                                ★ {t.diemDanhGia.toFixed(1)}/5
+                              <span style={{ color: '#09090B', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                <Star size={12} strokeWidth={1.5} fill="#F59E0B" color="#F59E0B" />
+                                <span>{t.diemDanhGia.toFixed(1)}/5</span>
                               </span>
                               {t.thuong > 0 && (
-                                <div style={{ color: '#16A34A', fontSize: '11px', fontWeight: 600 }}>
+                                <div style={{ color: '#059669', fontSize: '11px', fontWeight: 600 }}>
                                   +{vnd(t.thuong)}
                                 </div>
                               )}
@@ -359,14 +370,16 @@ export default function GuidesPage() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button
                 className="btn btn-outline"
                 onClick={() => {
                   window.print();
                 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
               >
-                🖨️ In phiếu tính công
+                <Printer size={14} strokeWidth={1.5} />
+                <span>In phiếu tính công</span>
               </button>
               <button className="btn btn-primary" onClick={() => setDetailGuide(null)}>
                 Đóng

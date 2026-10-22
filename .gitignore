@@ -48,3 +48,4 @@ mobile/.pub/
 *.sw?
 .DS_Store
 Thumbs.db
+repopack-output.txt

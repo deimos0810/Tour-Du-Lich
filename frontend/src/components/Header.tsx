@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { findLabel } from '@/lib/nav';
+import { Search, LogOut } from 'lucide-react';
 
 export default function Header() {
   const path = usePathname();
@@ -20,52 +21,82 @@ export default function Header() {
 
   return (
     <header className="header">
-      {/* PAGE TITLE & BREADCRUMB */}
-      <div className="breadcrumb" style={{ fontSize: '13.5px', color: '#64748B' }}>
-        <span>Trang chủ / <strong style={{ color: '#0F172A', fontWeight: 700 }}>{findLabel(path) || 'Dashboard'}</strong></span>
+      {/* BREADCRUMB / VIEW TITLE */}
+      <div className="breadcrumb-nav">
+        <span>Hệ thống</span>
+        <span style={{ color: 'var(--zinc-300)' }}>/</span>
+        <strong>{findLabel(path) || 'Dashboard'}</strong>
       </div>
 
       {/* SEARCH BAR & USER ACTION */}
-      <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+      <div className="header-actions">
         {!isPortal && (
-          <div style={{ position: 'relative', width: '280px' }}>
+          <div className="search-container">
+            <Search size={15} strokeWidth={1.5} />
             <input
-              className="input"
-              style={{ width: '100%', padding: '7px 12px', fontSize: '13px', background: '#F8FAFC', borderColor: '#E2E8F0' }}
-              placeholder="Tìm kiếm tour, mã booking..."
+              className="search-input"
+              placeholder="Tìm kiếm mã tour, đơn booking..."
             />
           </div>
         )}
 
+        {/* LIVE SYSTEM STATUS BADGE */}
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '3px 8px',
+          borderRadius: 'var(--radius-sm)',
+          border: '1px solid var(--emerald-200)',
+          background: 'var(--emerald-50)',
+          color: 'var(--emerald-600)',
+          fontSize: '11px',
+          fontWeight: 600,
+        }}>
+          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--emerald-600)' }} />
+          <span>Hệ thống trực tuyến</span>
+        </div>
+
         {user ? (
-          <div className="user" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div className="avatar" style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '50%',
-              background: '#0D6EFD',
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '12px', borderLeft: '1px solid var(--border)' }}>
+            <div style={{
+              width: '30px',
+              height: '30px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--zinc-900)',
               color: '#FFFFFF',
               display: 'grid',
               placeItems: 'center',
-              fontWeight: 700,
-              fontSize: '12px'
+              fontWeight: 600,
+              fontSize: '11.5px',
+              letterSpacing: '-0.3px',
             }}>
               {getInitials(user.name)}
             </div>
-            <div>
-              <div className="user-name" style={{ fontWeight: 700, fontSize: '13px', color: '#0F172A' }}>{user.name}</div>
-              <div className="user-role" style={{ fontSize: '11px', color: '#64748B' }}>{user.primaryRole}</div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <div style={{ fontWeight: 600, fontSize: '12.5px', color: 'var(--zinc-900)', lineHeight: 1.2 }}>
+                {user.name}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                {user.primaryRole}
+              </div>
             </div>
             <button
               onClick={logout}
               className="btn btn-outline btn-sm"
-              style={{ padding: '4px 10px', fontSize: '12px', color: '#DC2626', borderColor: '#FCA5A5', background: '#FEF2F2', fontWeight: 600, marginLeft: '8px' }}
+              title="Đăng xuất"
+              style={{
+                padding: '5px 8px',
+                marginLeft: '4px',
+                color: 'var(--zinc-600)',
+                borderColor: 'var(--border)',
+              }}
             >
-              Đăng xuất
+              <LogOut size={13} strokeWidth={1.5} />
             </button>
           </div>
         ) : (
-          <Link href="/login" className="btn btn-primary btn-sm" style={{ fontWeight: 700 }}>
+          <Link href="/login" className="btn btn-primary btn-sm">
             Đăng nhập
           </Link>
         )}

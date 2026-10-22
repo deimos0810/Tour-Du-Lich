@@ -2,6 +2,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { AlertTriangle, Check, QrCode, Calendar, Users, X, ShieldCheck } from 'lucide-react';
 
 function SandboxPayContent() {
   const params = useParams();
@@ -110,11 +111,23 @@ function SandboxPayContent() {
   if (errorMsg && !booking) {
     return (
       <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', fontFamily: 'system-ui, sans-serif' }}>
-        <div style={{ maxWidth: '400px', width: '100%', background: '#FFFFFF', borderRadius: '16px', padding: '24px', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', border: '1px solid #E2E8F0' }}>
-          <div style={{ fontSize: '48px', marginBottom: '12px' }}>⚠️</div>
-          <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>Không Thể Thanh Toán</h2>
-          <p style={{ fontSize: '14px', color: '#64748B', marginBottom: '20px' }}>{errorMsg}</p>
-          <Link href="/portal" style={{ display: 'inline-block', background: isZaloPay ? '#0068FF' : '#0284C7', color: '#FFF', padding: '10px 20px', borderRadius: '8px', textDecoration: 'none', fontWeight: 700, fontSize: '14px' }}>
+        <div style={{ maxWidth: '400px', width: '100%', background: '#FFFFFF', borderRadius: 'var(--radius-lg)', padding: '24px', textAlign: 'center', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border)' }}>
+          <div style={{
+            width: '44px',
+            height: '44px',
+            borderRadius: 'var(--radius-md)',
+            background: 'var(--rose-50)',
+            color: 'var(--rose-600)',
+            display: 'grid',
+            placeItems: 'center',
+            margin: '0 auto 12px',
+            border: '1px solid var(--rose-200)',
+          }}>
+            <AlertTriangle size={22} strokeWidth={1.5} />
+          </div>
+          <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--zinc-900)', marginBottom: '8px' }}>Không Thể Thanh Toán</h2>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>{errorMsg}</p>
+          <Link href="/portal" style={{ display: 'inline-block', background: 'var(--zinc-900)', color: '#FFF', padding: '9px 18px', borderRadius: 'var(--radius-md)', textDecoration: 'none', fontWeight: 600, fontSize: '13px' }}>
             Về Trang Chủ VietTour
           </Link>
         </div>
@@ -130,7 +143,7 @@ function SandboxPayContent() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#0F172A', display: 'flex', justifyContent: 'center', padding: '16px 12px', fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ maxWidth: '440px', width: '100%', background: '#FFFFFF', borderRadius: '24px', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ maxWidth: '440px', width: '100%', background: '#FFFFFF', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }}>
         {/* APP HEADER GIẢ LẬP MOBILE / ZALOPAY */}
         <div style={{ background: gradientHeader, color: '#FFFFFF', padding: '20px 20px 16px', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
@@ -163,35 +176,35 @@ function SandboxPayContent() {
         {paidSuccess ? (
           /* MÀN HÌNH THANH TOÁN THÀNH CÔNG */
           <div style={{ padding: '32px 24px', textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div style={{ width: '70px', height: '70px', borderRadius: '50%', background: '#DCFCE7', color: '#16A34A', display: 'grid', placeItems: 'center', fontSize: '36px', margin: '0 auto 16px', boxShadow: '0 10px 20px rgba(22,163,74,0.15)' }}>
-              ✓
+            <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--emerald-50)', color: 'var(--emerald-600)', display: 'grid', placeItems: 'center', margin: '0 auto 16px', border: '1px solid var(--emerald-200)' }}>
+              <Check size={32} strokeWidth={2} />
             </div>
-            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
-              GIAO DỊCH THÀNH CÔNG!
+            <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--zinc-900)', marginBottom: '8px' }}>
+              GIAO DỊCH THÀNH CÔNG
             </h2>
-            <p style={{ fontSize: '13.5px', color: '#64748B', lineHeight: 1.5, marginBottom: '24px' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '24px' }}>
               Đơn hàng <strong>{maDon}</strong> đã được thanh toán thành công qua {isZaloPay ? 'Ví ZaloPay' : 'Cổng trực tuyến'}. Màn hình máy tính của bạn sẽ tự động kích hoạt vé ngay tức thì!
             </p>
 
-            <div style={{ background: '#F8FAFC', borderRadius: '14px', padding: '16px', border: '1px solid #E2E8F0', textAlign: 'left', fontSize: '13px', marginBottom: '24px' }}>
+            <div style={{ background: 'var(--zinc-50)', borderRadius: 'var(--radius-md)', padding: '16px', border: '1px solid var(--border)', textAlign: 'left', fontSize: '13px', marginBottom: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ color: '#64748B' }}>Người thụ hưởng:</span>
-                <strong style={{ color: '#0F172A' }}>VIETTOUR CORP</strong>
+                <span style={{ color: 'var(--text-muted)' }}>Người thụ hưởng:</span>
+                <strong style={{ color: 'var(--zinc-900)' }}>VIETTOUR CORP</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ color: '#64748B' }}>Phương thức:</span>
+                <span style={{ color: 'var(--text-muted)' }}>Phương thức:</span>
                 <strong style={{ color: primaryColor }}>{isZaloPay ? 'Ví Điện Tử ZaloPay' : 'Chuyển Khoản Ngân Hàng'}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ color: '#64748B' }}>Số tiền:</span>
-                <strong style={{ color: '#16A34A', fontSize: '14px' }}>{vnd(finalAmount)}</strong>
+                <span style={{ color: 'var(--text-muted)' }}>Số tiền:</span>
+                <strong style={{ color: 'var(--emerald-600)', fontSize: '14px' }}>{vnd(finalAmount)}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ color: '#64748B' }}>Thời gian:</span>
-                <span style={{ color: '#0F172A' }}>{new Date().toLocaleTimeString('vi-VN')} {new Date().toLocaleDateString('vi-VN')}</span>
+                <span style={{ color: 'var(--text-muted)' }}>Thời gian:</span>
+                <span style={{ color: 'var(--zinc-900)' }}>{new Date().toLocaleTimeString('vi-VN')} {new Date().toLocaleDateString('vi-VN')}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#64748B' }}>Trạng thái vé:</span>
+                <span style={{ color: 'var(--text-muted)' }}>Trạng thái vé:</span>
                 <strong style={{ color: primaryColor }}>Đã xuất vé điện tử</strong>
               </div>
             </div>
@@ -200,17 +213,20 @@ function SandboxPayContent() {
               <Link
                 href={`/portal/ticket/${maDon}`}
                 style={{
-                  display: 'block',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
                   background: primaryColor,
                   color: '#FFFFFF',
                   textDecoration: 'none',
-                  padding: '14px',
-                  borderRadius: '12px',
-                  fontWeight: 800,
-                  fontSize: '14px',
+                  padding: '12px',
+                  borderRadius: 'var(--radius-md)',
+                  fontWeight: 600,
+                  fontSize: '13.5px',
                 }}
               >
-                🎟️ Xem Thẻ Lên Tàu & Vé Điện Tử QR
+                <QrCode size={14} strokeWidth={1.5} /> Xem Thẻ Lên Tàu & Vé Điện Tử QR
               </Link>
               <Link
                 href="/portal/my-bookings"
@@ -219,10 +235,10 @@ function SandboxPayContent() {
                   background: '#F1F5F9',
                   color: '#334155',
                   textDecoration: 'none',
-                  padding: '12px',
-                  borderRadius: '12px',
-                  fontWeight: 700,
-                  fontSize: '13.5px',
+                  padding: '10px',
+                  borderRadius: 'var(--radius-md)',
+                  fontWeight: 600,
+                  fontSize: '13px',
                 }}
               >
                 Về Đơn Hàng Của Tôi
@@ -233,16 +249,16 @@ function SandboxPayContent() {
           /* MÀN HÌNH XÁC NHẬN THANH TOÁN */
           <div style={{ padding: '20px 20px 24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
             {/* THÔNG TIN TOUR */}
-            <div style={{ background: '#F8FAFC', borderRadius: '14px', padding: '14px', border: '1px solid #E2E8F0', marginBottom: '16px' }}>
-              <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>HÀNH TRÌNH DU LỊCH</div>
-              <div style={{ fontSize: '14.5px', fontWeight: 800, color: '#0F172A', marginTop: '3px' }}>
+            <div style={{ background: 'var(--zinc-50)', borderRadius: 'var(--radius-md)', padding: '14px', border: '1px solid var(--border)', marginBottom: '16px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>HÀNH TRÌNH DU LỊCH</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--zinc-900)', marginTop: '3px' }}>
                 {booking?.LichKhoiHanh?.Tour?.TenTour || 'Tour Du Lịch VietTour'}
               </div>
-              <div style={{ fontSize: '12.5px', color: '#475569', marginTop: '4px' }}>
-                📅 Khởi hành: {booking?.LichKhoiHanh?.NgayKhoiHanh ? new Date(booking.LichKhoiHanh.NgayKhoiHanh).toLocaleDateString('vi-VN') : '15/10/2026'}
+              <div style={{ fontSize: '12px', color: 'var(--zinc-600)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Calendar size={13} strokeWidth={1.5} /> Khởi hành: {booking?.LichKhoiHanh?.NgayKhoiHanh ? new Date(booking.LichKhoiHanh.NgayKhoiHanh).toLocaleDateString('vi-VN') : '15/10/2026'}
               </div>
-              <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
-                👥 Khách: {booking?.SoLuongNguoiLon || 1} Người lớn {booking?.SoLuongTreEm ? `, ${booking.SoLuongTreEm} Trẻ em` : ''}
+              <div style={{ fontSize: '12px', color: 'var(--zinc-600)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Users size={13} strokeWidth={1.5} /> Khách: {booking?.SoLuongNguoiLon || 1} Người lớn {booking?.SoLuongTreEm ? `, ${booking.SoLuongTreEm} Trẻ em` : ''}
               </div>
             </div>
 
@@ -296,8 +312,8 @@ function SandboxPayContent() {
                   fontWeight: 800,
                   letterSpacing: '6px',
                   padding: '10px',
-                  borderRadius: '10px',
-                  border: `2px solid ${primaryColor}`,
+                  borderRadius: '8px',
+                  border: `1.5px solid ${primaryColor}`,
                   background: '#F8FAFC',
                   color: '#0F172A',
                   outline: 'none',
@@ -306,8 +322,9 @@ function SandboxPayContent() {
             </div>
 
             {errorMsg && (
-              <div style={{ background: '#FEE2E2', color: '#DC2626', padding: '10px 14px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 600, marginBottom: '14px' }}>
-                ✕ {errorMsg}
+              <div style={{ background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', padding: '10px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <X size={14} strokeWidth={2} />
+                <span>{errorMsg}</span>
               </div>
             )}
 
@@ -318,15 +335,14 @@ function SandboxPayContent() {
                 disabled={submitting}
                 style={{
                   width: '100%',
-                  padding: '14px',
+                  padding: '12px',
                   background: primaryColor,
                   color: '#FFFFFF',
                   border: 'none',
-                  borderRadius: '12px',
-                  fontSize: '15px',
-                  fontWeight: 800,
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 700,
                   cursor: submitting ? 'not-allowed' : 'pointer',
-                  boxShadow: `0 4px 14px ${isZaloPay ? 'rgba(0, 104, 255, 0.35)' : 'rgba(2, 132, 199, 0.35)'}`,
                   opacity: submitting ? 0.7 : 1,
                   display: 'flex',
                   alignItems: 'center',
@@ -334,10 +350,18 @@ function SandboxPayContent() {
                   gap: '8px',
                 }}
               >
-                {submitting ? 'ĐANG XỬ LÝ GIAO DỊCH...' : `✓ XÁC NHẬN THANH TOÁN (${isZaloPay ? 'ZALOPAY' : 'SANDBOX'})`}
+                {submitting ? (
+                  'ĐANG XỬ LÝ GIAO DỊCH...'
+                ) : (
+                  <>
+                    <Check size={16} strokeWidth={2} />
+                    <span>XÁC NHẬN THANH TOÁN ({isZaloPay ? 'ZALOPAY' : 'SANDBOX'})</span>
+                  </>
+                )}
               </button>
-              <p style={{ textAlign: 'center', fontSize: '11.5px', color: '#94A3B8', marginTop: '10px', margin: '10px 0 0' }}>
-                🔒 Giao dịch được mã hóa an toàn theo tiêu chuẩn PCI-DSS &amp; ZaloPay Gateway
+              <p style={{ textAlign: 'center', fontSize: '11px', color: '#64748B', marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+                <ShieldCheck size={13} strokeWidth={1.5} />
+                <span>Giao dịch được mã hóa an toàn theo tiêu chuẩn PCI-DSS &amp; ZaloPay Gateway</span>
               </p>
             </div>
           </div>

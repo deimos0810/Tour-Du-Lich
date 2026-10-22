@@ -1,10 +1,11 @@
 import { BadRequestException, Body, Controller, Get, Injectable, Module, Post, Query } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.module.js';
+import { ExportModule, TicketMailService } from './export.module.js';
 
 @Injectable()
 export class ZaloPayService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private mail: TicketMailService) {}
 
   /**
    * Tạo phiên thanh toán ZaloPay Gateway.
@@ -55,7 +56,13 @@ export class ZaloPayService {
     const phaiThu = Number(don.TongTien) - Number(don.GiamGia);
     const transId = body.appTransId || `ZP-${Date.now().toString().slice(-8)}`;
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Khóa dòng đơn để callback gọi lặp không ghi nhận thanh toán trùng
+      await tx.$queryRaw`SELECT donhangid FROM dondattour WHERE donhangid = ${don.DonHangID} FOR UPDATE`;
+      const current = await tx.donDatTour.findUniqueOrThrow({ where: { DonHangID: don.DonHangID } });
+      if (current.TrangThaiDon === 'Da thanh toan') return { updated: current, alreadyPaid: true };
+      if (current.TrangThaiDon === 'Da huy') throw new BadRequestException('Đơn hàng đã bị hủy');
+
       // Ghi nhận thanh toán
       await tx.thanhToan.create({
         data: {
@@ -79,12 +86,17 @@ export class ZaloPayService {
         },
       });
 
-      return {
-        return_code: 1,
-        return_message: 'Xác nhận thanh toán ZaloPay thành công!',
-        don: updated,
-      };
+      return { updated, alreadyPaid: false };
     });
+
+    // Gửi email xác nhận kèm vé điện tử QR (không chặn phản hồi)
+    if (!result.alreadyPaid) void this.mail.sendTicketEmail(don.MaDon);
+
+    return {
+      return_code: 1,
+      return_message: 'Xác nhận thanh toán ZaloPay thành công!',
+      don: result.updated,
+    };
   }
 }
 
@@ -104,6 +116,7 @@ export class ZaloPayController {
 }
 
 @Module({
+  imports: [ExportModule],
   controllers: [ZaloPayController],
   providers: [ZaloPayService],
   exports: [ZaloPayService],

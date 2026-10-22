@@ -1,7 +1,10 @@
 import {
   BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Injectable, Module,
-  NotFoundException, Param, ParseIntPipe, Patch, Post, Query,
+  NotFoundException, Param, ParseIntPipe, Patch, Post, Query, UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../common/guards/roles.guard.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
 import { PrismaService } from '../prisma/prisma.module.js';
 import { hashPassword, validatePasswordStrength } from '../common/password.js';
 
@@ -103,6 +106,8 @@ export class PromotionsService {
 }
 
 @Controller('promotions')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('Dieu hanh', 'Ke toan')
 export class PromotionsController {
   constructor(private s: PromotionsService) {}
   @Get() list() { return this.s.list(); }
@@ -223,6 +228,8 @@ export class UsersService {
 }
 
 @Controller('users')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('Admin')
 export class UsersController {
   constructor(private s: UsersService) {}
   @Get() list(@Query() q: Record<string, string>) { return this.s.list(q); }
@@ -315,6 +322,8 @@ export class ReportsService {
 }
 
 @Controller('reports')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('Dieu hanh', 'Ke toan')
 export class ReportsController {
   constructor(private s: ReportsService) {}
   @Get('overview') overview(@Query('year') y?: string) { return this.s.overview(y); }
@@ -526,6 +535,8 @@ export class GuideOpsService {
 }
 
 @Controller()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('Dieu hanh')
 export class GuideOpsController {
   constructor(private s: GuideOpsService) {}
   @Post('departures/create') createDeparture(@Body() b: any) { return this.s.createDeparture(b); }
@@ -533,10 +544,10 @@ export class GuideOpsController {
   @Get('departures/:id/available-guides') avail(@Param('id', ParseIntPipe) id: number) { return this.s.availableGuides(id); }
   @Post('departures/:id/assign-guide') assign(@Param('id', ParseIntPipe) id: number, @Body() b: any) { return this.s.assignGuide(id, b); }
   @Delete('assignments/:id') unassign(@Param('id', ParseIntPipe) id: number) { return this.s.unassign(id); }
-  @Patch('assignments/:id/respond') respond(@Param('id', ParseIntPipe) id: number, @Body() b: { TrangThai: string; taiKhoanId?: number }) { return this.s.respondAssignment(id, b.TrangThai, b.taiKhoanId); }
-  @Get('guide-payroll') payroll(@Query('month') m?: string, @Query('donGia') d?: string) { return this.s.payroll(m, d); }
-  @Get('guide/my-schedule') schedule(@Query('taiKhoanId') id: string) { return this.s.mySchedule(Number(id)); }
-  @Post('guide/checkin-qr') checkin(@Body() b: { code: string; lichId?: number }) { return this.s.checkinByQr(b.code, b.lichId); }
+  @Patch('assignments/:id/respond') @Roles('HDV', 'Dieu hanh') respond(@Param('id', ParseIntPipe) id: number, @Body() b: { TrangThai: string; taiKhoanId?: number }) { return this.s.respondAssignment(id, b.TrangThai, b.taiKhoanId); }
+  @Get('guide-payroll') @Roles('Dieu hanh', 'Ke toan') payroll(@Query('month') m?: string, @Query('donGia') d?: string) { return this.s.payroll(m, d); }
+  @Get('guide/my-schedule') @Roles('HDV', 'Dieu hanh') schedule(@Query('taiKhoanId') id: string) { return this.s.mySchedule(Number(id)); }
+  @Post('guide/checkin-qr') @Roles('HDV', 'Dieu hanh') checkin(@Body() b: { code: string; lichId?: number }) { return this.s.checkinByQr(b.code, b.lichId); }
 }
 
 /* =============================================================================
@@ -608,6 +619,8 @@ export class SupplierOpsService {
 }
 
 @Controller()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('Dieu hanh', 'Ke toan')
 export class SupplierOpsController {
   constructor(private s: SupplierOpsService) {}
   @Post('suppliers/create') create(@Body() b: any) { return this.s.createSupplier(b); }

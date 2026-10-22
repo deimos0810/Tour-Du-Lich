@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Icon from '@/components/Icon';
 import { api, useApi } from '@/lib/api';
 import { ApiNotice, EmptyRow, date, vnd } from '@/lib/ui';
+import { Edit2, Tag, X } from 'lucide-react';
 
 type Promotion = {
   KhuyenMaiID: number;
@@ -263,25 +264,33 @@ export default function PromotionsPage() {
           <div
             style={{
               background: '#FFFFFF',
-              borderRadius: '12px',
+              borderRadius: '8px',
+              border: '1px solid #E4E4E7',
               maxWidth: '600px',
               width: '100%',
               padding: '24px',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                {editingPromo ? '✏️ Cập nhật mã khuyến mãi' : '🎁 Thêm chương trình khuyến mãi mới'}
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {editingPromo ? (
+                  <Edit2 size={18} strokeWidth={1.5} style={{ color: '#09090B' }} />
+                ) : (
+                  <Tag size={18} strokeWidth={1.5} style={{ color: '#09090B' }} />
+                )}
+                <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#09090B', margin: 0 }}>
+                  {editingPromo ? 'Cập nhật mã khuyến mãi' : 'Thêm chương trình khuyến mãi mới'}
+                </h2>
+              </div>
               <button
                 type="button"
                 className="icon-btn"
                 onClick={() => setShowModal(false)}
-                style={{ border: 'none', background: '#F1F5F9', borderRadius: '50%' }}
+                style={{ border: '1px solid #E4E4E7', background: '#FFFFFF', borderRadius: '6px', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
               >
-                ✕
+                <X size={14} strokeWidth={2} />
               </button>
             </div>
 

@@ -1,9 +1,9 @@
 'use client';
 import { useMemo, useState } from 'react';
-import Icon from '@/components/Icon';
 import { api, useApi } from '@/lib/api';
 import { ApiNotice, EmptyRow, Status, vnd } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
+import { Plus, Search, Eye, Edit2, Trash2, X, MapPin, Calendar, Package } from 'lucide-react';
 
 type Tour = {
   TourID: number;
@@ -173,7 +173,7 @@ export default function ToursPage() {
           <p className="page-desc">Chương trình tour, bảng giá người lớn/trẻ em, lịch trình và dịch vụ đi kèm</p>
         </div>
         <button className="btn btn-primary" id="btn-add-tour" onClick={openCreateModal}>
-          <Icon name="plus" size={14} /> Thêm tour mới
+          <Plus size={14} strokeWidth={1.5} /> Thêm tour mới
         </button>
       </div>
 
@@ -220,13 +220,13 @@ export default function ToursPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>Tour & Mã</th>
-                <th>Danh mục</th>
-                <th>Điểm khởi hành → Đến</th>
-                <th>Thời gian</th>
-                <th>Giá NL / Trẻ em</th>
-                <th>Trạng thái</th>
-                <th style={{ textAlign: 'right' }}>Thao tác</th>
+                <th>TOUR & MÃ</th>
+                <th>DANH MỤC</th>
+                <th>ĐIỂM ĐẾN</th>
+                <th>THỜI GIAN</th>
+                <th>GIÁ NL / TRẺ EM</th>
+                <th>TRẠNG THÁI</th>
+                <th style={{ textAlign: 'right' }}>THAO TÁC</th>
               </tr>
             </thead>
             <tbody>
@@ -271,28 +271,30 @@ export default function ToursPage() {
                       <Status value={t.TrangThaiDuyet} />
                     </td>
                     <td>
-                      <div className="actions" style={{ justifyContent: 'flex-end' }}>
+                      <div className="actions" style={{ justifyContent: 'flex-end', display: 'flex', gap: '4px' }}>
                         <button
-                          className="icon-btn"
+                          className="btn btn-outline btn-sm"
                           title="Xem chi tiết"
                           onClick={() => setViewingTour(t)}
+                          style={{ padding: '5px 8px' }}
                         >
-                          <Icon name="eye" size={15} />
+                          <Eye size={13} strokeWidth={1.5} />
                         </button>
                         <button
-                          className="icon-btn"
+                          className="btn btn-outline btn-sm"
                           title="Chỉnh sửa tour"
                           onClick={() => openEditModal(t)}
+                          style={{ padding: '5px 8px' }}
                         >
-                          <Icon name="edit" size={15} />
+                          <Edit2 size={13} strokeWidth={1.5} />
                         </button>
                         <button
-                          className="icon-btn"
+                          className="btn btn-danger-outline btn-sm"
                           title="Xóa tour"
                           onClick={() => remove(t)}
-                          style={{ color: '#DC2626' }}
+                          style={{ padding: '5px 8px' }}
                         >
-                          <Icon name="trash" size={15} />
+                          <Trash2 size={13} strokeWidth={1.5} />
                         </button>
                       </div>
                     </td>
@@ -324,39 +326,40 @@ export default function ToursPage() {
           <div
             style={{
               background: '#FFFFFF',
-              borderRadius: '12px',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--border)',
               maxWidth: '850px',
               width: '100%',
               maxHeight: '90vh',
               overflowY: 'auto',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+              boxShadow: 'var(--shadow-md)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div
               style={{
-                padding: '20px 24px',
-                borderBottom: '1px solid #E2E8F0',
+                padding: '16px 20px',
+                borderBottom: '1px solid var(--border)',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
               }}
             >
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                  {editingTour ? `✏️ Cập nhật Tour #${editingTour.MaTour}` : '✈️ Thêm Tour du lịch mới'}
+                <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--zinc-900)', margin: 0 }}>
+                  {editingTour ? `Cập nhật Tour #${editingTour.MaTour}` : 'Thêm Tour du lịch mới'}
                 </h2>
-                <p style={{ fontSize: '12.5px', color: '#64748B', margin: '2px 0 0' }}>
-                  Thiết kế thông tin chương trình, định giá và dịch vụ đi kèm
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                  Thiết lập thông tin hành trình, đơn giá và dịch vụ đi kèm
                 </p>
               </div>
               <button
                 type="button"
-                className="icon-btn"
+                className="btn btn-outline btn-sm"
                 onClick={() => setShowModal(false)}
-                style={{ border: 'none', background: '#F1F5F9', borderRadius: '50%' }}
+                style={{ padding: '4px 8px', borderRadius: 'var(--radius-sm)' }}
               >
-                ✕
+                <X size={14} strokeWidth={1.5} />
               </button>
             </div>
 
@@ -629,12 +632,14 @@ export default function ToursPage() {
           <div
             style={{
               background: '#FFFFFF',
-              borderRadius: '12px',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--border)',
               maxWidth: '700px',
               width: '100%',
               maxHeight: '90vh',
               overflowY: 'auto',
-              padding: '28px',
+              padding: '24px',
+              boxShadow: 'var(--shadow-md)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -643,18 +648,18 @@ export default function ToursPage() {
                 <span className="badge badge-info" style={{ marginBottom: '6px' }}>
                   {viewingTour.DanhMuc.TenDanhMuc}
                 </span>
-                <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', margin: '4px 0' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--zinc-900)', margin: '4px 0' }}>
                   {viewingTour.TenTour}
                 </h2>
                 <div className="code">Mã tour: {viewingTour.MaTour}</div>
               </div>
               <button
                 type="button"
-                className="icon-btn"
+                className="btn btn-outline btn-sm"
                 onClick={() => setViewingTour(null)}
-                style={{ border: 'none', background: '#F1F5F9', borderRadius: '50%' }}
+                style={{ padding: '4px 8px' }}
               >
-                ✕
+                <X size={14} strokeWidth={1.5} />
               </button>
             </div>
 
@@ -685,16 +690,16 @@ export default function ToursPage() {
             </div>
 
             <div style={{ marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>📍 Tuyến đường & Phương tiện:</h3>
-              <p style={{ fontSize: '13.5px', color: '#334155', margin: 0 }}>
+              <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--zinc-900)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Tuyến đường & Phương tiện:</h3>
+              <p style={{ fontSize: '13px', color: 'var(--zinc-700)', margin: 0 }}>
                 Khởi hành từ <strong>{viewingTour.DiemKhoiHanh || 'TP.HCM'}</strong> đến <strong>{viewingTour.DiemDen}</strong> bằng {viewingTour.PhuongTien || 'Ô tô/Máy bay'}.
               </p>
             </div>
 
             {viewingTour.LichTrinh && (
               <div style={{ marginBottom: '16px' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', marginBottom: '8px' }}>🗓️ Lịch trình chi tiết:</h3>
-                <div style={{ fontSize: '13px', color: '#475569', whiteSpace: 'pre-line', background: '#F8FAFC', padding: '12px 16px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--zinc-900)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Lịch trình chi tiết:</h3>
+                <div style={{ fontSize: '12.5px', color: 'var(--zinc-700)', whiteSpace: 'pre-line', background: 'var(--zinc-50)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
                   {viewingTour.LichTrinh}
                 </div>
               </div>
@@ -702,8 +707,8 @@ export default function ToursPage() {
 
             {viewingTour.DichVuDiKem && (
               <div style={{ marginBottom: '20px' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', marginBottom: '8px' }}>🎁 Dịch vụ đi kèm:</h3>
-                <div style={{ fontSize: '13px', color: '#475569', whiteSpace: 'pre-line', background: '#F8FAFC', padding: '12px 16px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                <h3 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--zinc-900)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dịch vụ đi kèm:</h3>
+                <div style={{ fontSize: '12.5px', color: 'var(--zinc-700)', whiteSpace: 'pre-line', background: 'var(--zinc-50)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
                   {viewingTour.DichVuDiKem}
                 </div>
               </div>

@@ -1,7 +1,8 @@
 'use client';
 import { useState } from 'react';
-import { useApi } from '@/lib/api';
+import { downloadFile, useApi } from '@/lib/api';
 import { ApiNotice, vnd } from '@/lib/ui';
+import { TrendingUp, Trophy, Users, BarChart3 } from 'lucide-react';
 
 type ReportData = {
   year: number;
@@ -47,6 +48,18 @@ type ReportData = {
 export default function ReportsPage() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const { data, error, loading } = useApi<ReportData>(`/reports/overview?year=${selectedYear}`);
+  const [exporting, setExporting] = useState(false);
+
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      await downloadFile('/export/reports/excel', 'bao-cao-tai-chinh.xlsx');
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Không thể xuất file Excel');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const maxCustomersMonth = Math.max(1, ...(data?.monthly.map((m) => m.sokhach) ?? [1]));
   const maxRevenueMonth = Math.max(1, ...(data?.monthly.map((m) => m.doanhthu) ?? [1]));
@@ -74,6 +87,9 @@ export default function ReportsPage() {
               </option>
             ))}
           </select>
+          <button className="btn btn-outline btn-sm" onClick={exportExcel} disabled={exporting}>
+            {exporting ? 'Đang xuất...' : 'Xuất Excel Báo cáo tài chính'}
+          </button>
         </div>
       </div>
 
@@ -136,8 +152,11 @@ export default function ReportsPage() {
       <section className="card" style={{ marginBottom: '24px' }}>
         <div className="card-head">
           <div>
-            <h2 className="card-title">📈 Phân tích Mùa Cao Điểm: Lượt khách & Doanh thu theo 12 Tháng</h2>
-            <p style={{ fontSize: '12px', color: '#64748B', margin: '2px 0 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <TrendingUp size={16} strokeWidth={1.5} style={{ color: '#09090B' }} />
+              <h2 className="card-title" style={{ margin: 0 }}>Phân tích Mùa Cao Điểm: Lượt khách & Doanh thu theo 12 Tháng</h2>
+            </div>
+            <p style={{ fontSize: '12px', color: '#71717A', margin: '2px 0 0' }}>
               Xác định mùa du lịch cao điểm dựa trên số lượng khách khởi hành thực tế
             </p>
           </div>
@@ -184,7 +203,10 @@ export default function ReportsPage() {
         {/* TOP TOUR ĐƯỢC ĐẶT NHIỀU NHẤT */}
         <section className="card">
           <div className="card-head">
-            <h2 className="card-title">🏆 Top Tour được đặt nhiều nhất ({selectedYear})</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Trophy size={16} strokeWidth={1.5} style={{ color: '#09090B' }} />
+              <h2 className="card-title" style={{ margin: 0 }}>Top Tour được đặt nhiều nhất ({selectedYear})</h2>
+            </div>
           </div>
           <div className="table-wrap">
             <table className="table">
@@ -244,7 +266,10 @@ export default function ReportsPage() {
         {/* SỐ LƯỢNG KHÁCH THEO TỪNG TOUR */}
         <section className="card">
           <div className="card-head">
-            <h2 className="card-title">👥 Thống kê Lượng khách theo từng Tour</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Users size={16} strokeWidth={1.5} style={{ color: '#09090B' }} />
+              <h2 className="card-title" style={{ margin: 0 }}>Thống kê Lượng khách theo từng Tour</h2>
+            </div>
           </div>
           <div className="table-wrap">
             <table className="table">
@@ -291,7 +316,10 @@ export default function ReportsPage() {
       {/* BÁO CÁO DOANH THU THEO QUÝ */}
       <section className="card">
         <div className="card-head">
-          <h2 className="card-title">📊 Doanh thu & Lượt khách phân bổ theo Quý</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <BarChart3 size={16} strokeWidth={1.5} style={{ color: '#09090B' }} />
+            <h2 className="card-title" style={{ margin: 0 }}>Doanh thu & Lượt khách phân bổ theo Quý</h2>
+          </div>
         </div>
         <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
           {(data?.quarters ?? [1, 2, 3, 4].map((q) => ({ quy: q, sokhach: 0, doanhthu: 0 }))).map((q) => (

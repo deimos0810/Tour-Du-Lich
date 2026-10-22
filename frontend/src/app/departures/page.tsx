@@ -4,6 +4,7 @@ import Icon from '@/components/Icon';
 import { api, useApi } from '@/lib/api';
 import { ApiNotice, EmptyRow, Status, date, vnd } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
+import { User, AlertTriangle, Calendar, UserCheck, X } from 'lucide-react';
 
 type Departure = {
   LichID: number;
@@ -234,25 +235,27 @@ export default function DeparturesPage() {
                         {guides.length > 0 ? (
                           guides.map((g) => (
                             <div key={g.DieuPhoiID} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                              <span style={{ fontWeight: 600, color: '#0F172A' }}>
-                                👤 {g.HuongDanVien.NhanVien.HoTen}
+                              <span style={{ fontWeight: 600, color: '#09090B', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <User size={13} strokeWidth={1.5} />
+                                <span>{g.HuongDanVien.NhanVien.HoTen}</span>
                               </span>
-                              <span style={{ fontSize: '11px', color: '#64748B' }}>
+                              <span style={{ fontSize: '11px', color: '#71717A' }}>
                                 ({g.HuongDanVien.NhanVien.SoDienThoai})
                               </span>
                               <button
-                                style={{ border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', fontSize: '11px' }}
+                                style={{ border: 'none', background: 'transparent', color: '#DC2626', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
                                 title="Gỡ phân công"
                                 onClick={() => handleUnassign(g.DieuPhoiID)}
                               >
-                                ✕
+                                <X size={12} strokeWidth={2} />
                               </button>
                             </div>
                           ))
                         ) : (
-                          <span style={{ color: '#B45309', fontSize: '12.5px', fontWeight: 600 }}>
-                            ⚠️ Chưa gán HDV
-                          </span>
+                          <div style={{ color: '#D97706', fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <AlertTriangle size={13} strokeWidth={1.5} />
+                            <span>Chưa gán HDV</span>
+                          </div>
                         )}
                       </td>
                       <td>
@@ -338,25 +341,29 @@ export default function DeparturesPage() {
           <div
             style={{
               background: '#FFFFFF',
-              borderRadius: '12px',
+              borderRadius: '8px',
+              border: '1px solid #E4E4E7',
               maxWidth: '560px',
               width: '100%',
               padding: '24px',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                🗓️ Mở đợt khởi hành mới
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Calendar size={18} strokeWidth={1.5} style={{ color: '#09090B' }} />
+                <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#09090B', margin: 0 }}>
+                  Mở đợt khởi hành mới
+                </h2>
+              </div>
               <button
                 type="button"
                 className="icon-btn"
                 onClick={() => setShowCreateModal(false)}
-                style={{ border: 'none', background: '#F1F5F9', borderRadius: '50%' }}
+                style={{ border: '1px solid #E4E4E7', background: '#FFFFFF', borderRadius: '6px', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
               >
-                ✕
+                <X size={14} strokeWidth={2} />
               </button>
             </div>
 
@@ -485,25 +492,29 @@ export default function DeparturesPage() {
           <div
             style={{
               background: '#FFFFFF',
-              borderRadius: '12px',
-              maxWidth: '600px',
+              borderRadius: '8px',
+              border: '1px solid #E4E4E7',
+              maxWidth: '680px',
               width: '100%',
               padding: '24px',
               maxHeight: '90vh',
               overflowY: 'auto',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                  🚩 Phân công Hướng dẫn viên
-                </h2>
-                <p style={{ fontSize: '12.5px', color: '#64748B', margin: '2px 0 0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <UserCheck size={18} strokeWidth={1.5} style={{ color: '#09090B' }} />
+                  <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#09090B', margin: 0 }}>
+                    Phân công Hướng dẫn viên
+                  </h2>
+                </div>
+                <p style={{ fontSize: '12.5px', color: '#71717A', margin: '2px 0 0' }}>
                   Chuyến đi: <strong>{assigningLich.Tour.TenTour}</strong> ({assigningLich.MaLich})
                 </p>
-                <p style={{ fontSize: '12px', color: '#0D6EFD', margin: '2px 0 0' }}>
+                <p style={{ fontSize: '12px', color: '#09090B', margin: '2px 0 0' }}>
                   Thời gian: {date(assigningLich.NgayKhoiHanh)} → {date(assigningLich.NgayKetThuc)}
                 </p>
               </div>
@@ -511,9 +522,9 @@ export default function DeparturesPage() {
                 type="button"
                 className="icon-btn"
                 onClick={() => setAssigningLich(null)}
-                style={{ border: 'none', background: '#F1F5F9', borderRadius: '50%' }}
+                style={{ border: '1px solid #E4E4E7', background: '#FFFFFF', borderRadius: '6px', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
               >
-                ✕
+                <X size={14} strokeWidth={2} />
               </button>
             </div>
 

@@ -4,8 +4,10 @@ import Link from 'next/link';
 import CustomerHeader from '@/components/customer/CustomerHeader';
 import CustomerFooter from '@/components/customer/CustomerFooter';
 import { api, useApi } from '@/lib/api';
+import { bookingSchema, firstError } from '@/lib/validations';
 import { vnd } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
+import { Plane, Building2, Utensils, ShieldCheck, Check, X, CheckCircle2, Star } from 'lucide-react';
 
 type Review = {
   DanhGiaID: number;
@@ -173,9 +175,23 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
       return;
     }
 
+    if (!user?.customerId) {
+      alert('Vui lòng đăng nhập tài khoản khách hàng để đặt tour!');
+      return;
+    }
+    const invalid = firstError(bookingSchema, {
+      soLuongNguoiLon: adults,
+      soLuongTreEm: children,
+      hanhKhach: passengers.map((p) => ({ hoTen: p.hoTen, cccd: p.cccd.trim() })),
+    });
+    if (invalid) {
+      alert(invalid);
+      return;
+    }
+
     setBookingLoading(true);
     try {
-      const customerId = user?.customerId || 1;
+      const customerId = user.customerId;
       const res = await api<{ MaDon: string; TongTien: string; DonHangID: number }>(
         '/auth/customer-booking',
         {
@@ -244,7 +260,7 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
           const data = await res.json();
           if (data.TrangThaiDon === 'Da thanh toan') {
             clearInterval(interval);
-            alert(`🎉 Giao dịch thành công trên điện thoại! Đã kích hoạt vé điện tử cho mã đơn ${createdBooking.MaDon}.`);
+            alert(`Giao dịch thành công trên điện thoại! Đã kích hoạt vé điện tử cho mã đơn ${createdBooking.MaDon}.`);
             window.location.href = `/portal/ticket/${createdBooking.MaDon}`;
           }
         }
@@ -299,14 +315,14 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
         {/* HERO TITLE & GALLERY */}
         <div style={{ maxWidth: '1280px', margin: '24px auto 0', padding: '0 24px' }}>
           <div style={{ marginBottom: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
-              <span style={{ background: '#005BAA', color: '#FFF', fontSize: '11px', fontWeight: 800, padding: '4px 10px', borderRadius: '4px', textTransform: 'uppercase' }}>
-                ✈️ BAO GỒM VÉ MÁY BAY KHỨ HỒI
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+              <span style={{ background: 'var(--zinc-900)', color: '#FFF', fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: 'var(--radius-sm)', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <Plane size={12} strokeWidth={1.5} /> BAO GỒM VÉ MÁY BAY KHỨ HỒI
               </span>
-              <span style={{ background: '#FEF3C7', color: '#B45309', fontSize: '12px', fontWeight: 700, padding: '4px 10px', borderRadius: '4px' }}>
-                ⭐ 5.0 (Xuất sắc)
+              <span style={{ background: 'var(--zinc-100)', color: '#B45309', fontSize: '12px', fontWeight: 600, padding: '4px 10px', borderRadius: 'var(--radius-sm)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <Star size={12} strokeWidth={1.5} fill="#B45309" color="#B45309" /> 5.0 (Xuất sắc)
               </span>
-              <span className="code" style={{ fontSize: '12px', fontWeight: 700 }}>Mã tour: {tour.MaTour}</span>
+              <span className="code" style={{ fontSize: '12px', fontWeight: 600 }}>Mã tour: {tour.MaTour}</span>
             </div>
             <h1 style={{ fontSize: '30px', fontWeight: 900, color: '#0F172A', margin: 0 }}>
               {tour.TenTour}
@@ -357,49 +373,57 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
             {/* LEFT COLUMN: TABS & DETAILS */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
               {/* 1. ĐIỂM NỔI BẬT */}
-              <div className="card" style={{ padding: '26px', borderRadius: '16px', background: '#FFFFFF', border: '1px solid #E2E8F0' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', marginBottom: '14px' }}>
+              <div style={{ padding: '24px', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)' }}>
+                <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', marginBottom: '14px' }}>
                   Điểm nổi bật của hành trình
                 </h2>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                  <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #F1F5F9' }}>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#005BAA', marginBottom: '2px' }}>✈️ Vé máy bay khứ hồi</div>
-                    <p style={{ fontSize: '12.5px', color: '#64748B', margin: 0 }}>Đầy đủ 20kg ký gửi + 7kg xách tay tiêu chuẩn hàng không.</p>
+                  <div style={{ background: 'var(--zinc-50)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--zinc-900)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Plane size={15} strokeWidth={1.5} /> Vé máy bay khứ hồi
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>Đầy đủ 20kg ký gửi + 7kg xách tay tiêu chuẩn hàng không.</p>
                   </div>
-                  <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #F1F5F9' }}>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#005BAA', marginBottom: '2px' }}>🏨 Khách sạn 4 sao cao cấp</div>
-                    <p style={{ fontSize: '12.5px', color: '#64748B', margin: 0 }}>Nghỉ dưỡng tiện nghi, view đẹp, kèm buffet sáng hàng ngày.</p>
+                  <div style={{ background: 'var(--zinc-50)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--zinc-900)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Building2 size={15} strokeWidth={1.5} /> Khách sạn 4 sao cao cấp
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>Nghỉ dưỡng tiện nghi, view đẹp, kèm buffet sáng hàng ngày.</p>
                   </div>
-                  <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #F1F5F9' }}>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#005BAA', marginBottom: '2px' }}>🍲 Ẩm thực đặc sản chọn lọc</div>
-                    <p style={{ fontSize: '12.5px', color: '#64748B', margin: 0 }}>Thưởng thức các bữa ăn đặc sản địa phương phong phú.</p>
+                  <div style={{ background: 'var(--zinc-50)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--zinc-900)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Utensils size={15} strokeWidth={1.5} /> Ẩm thực đặc sản chọn lọc
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>Thưởng thức các bữa ăn đặc sản địa phương phong phú.</p>
                   </div>
-                  <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #F1F5F9' }}>
-                    <div style={{ fontSize: '15px', fontWeight: 700, color: '#005BAA', marginBottom: '2px' }}>🛡️ Bảo hiểm du lịch tối đa 120Tr</div>
-                    <p style={{ fontSize: '12.5px', color: '#64748B', margin: 0 }}>An tâm tuyệt đối trong suốt chuyến đi.</p>
+                  <div style={{ background: 'var(--zinc-50)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--zinc-900)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <ShieldCheck size={15} strokeWidth={1.5} /> Bảo hiểm du lịch tối đa 120Tr
+                    </div>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>An tâm tuyệt đối trong suốt chuyến đi.</p>
                   </div>
                 </div>
               </div>
 
               {/* 2. LỊCH TRÌNH THEO NGÀY (TIMELINE) */}
-              <div className="card" style={{ padding: '26px', borderRadius: '16px', background: '#FFFFFF', border: '1px solid #E2E8F0' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', marginBottom: '18px' }}>
+              <div style={{ padding: '24px', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)' }}>
+                <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', marginBottom: '18px' }}>
                   Lịch trình chi tiết từng ngày
                 </h2>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {itineraryDays.map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', gap: '16px' }}>
                       <div style={{
-                        width: '36px', height: '36px', borderRadius: '50%', background: '#005BAA',
-                        color: '#FFF', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '13px', flexShrink: 0
+                        width: '32px', height: '32px', borderRadius: 'var(--radius-sm)', background: 'var(--zinc-900)',
+                        color: '#FFF', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: '13px', flexShrink: 0
                       }}>
                         {idx + 1}
                       </div>
-                      <div style={{ flex: 1, background: '#F8FAFC', padding: '14px 18px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                        <h4 style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', marginBottom: '4px' }}>
+                      <div style={{ flex: 1, background: 'var(--zinc-50)', padding: '14px 18px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                        <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--zinc-900)', marginBottom: '4px' }}>
                           {item.title}
                         </h4>
-                        <p style={{ fontSize: '13.5px', color: '#475569', lineHeight: 1.6, margin: 0 }}>
+                        <p style={{ fontSize: '13px', color: 'var(--zinc-600)', lineHeight: 1.6, margin: 0 }}>
                           {item.detail}
                         </p>
                       </div>
@@ -409,14 +433,16 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
               </div>
 
               {/* 3. DỊCH VỤ BAO GỒM & KHÔNG BAO GỒM */}
-              <div className="card" style={{ padding: '26px', borderRadius: '16px', background: '#FFFFFF', border: '1px solid #E2E8F0' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', marginBottom: '16px' }}>
+              <div style={{ padding: '24px', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)' }}>
+                <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', marginBottom: '16px' }}>
                   Điều khoản Dịch vụ
                 </h2>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', fontSize: '13px', lineHeight: 1.7 }}>
                   <div>
-                    <h4 style={{ color: '#059669', fontWeight: 800, marginBottom: '6px' }}>✓ Giá tour bao gồm:</h4>
-                    <ul style={{ margin: 0, paddingLeft: '16px', color: '#475569' }}>
+                    <h4 style={{ color: 'var(--emerald-600)', fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Check size={14} strokeWidth={2} /> Giá tour bao gồm:
+                    </h4>
+                    <ul style={{ margin: 0, paddingLeft: '16px', color: 'var(--zinc-600)' }}>
                       <li>Vé máy bay khứ hồi (20kg ký gửi + 7kg xách tay)</li>
                       <li>Khách sạn 4 sao tiêu chuẩn (2 khách/phòng)</li>
                       <li>Xe du lịch máy lạnh đưa đón suốt tuyến</li>
@@ -426,8 +452,10 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
                     </ul>
                   </div>
                   <div>
-                    <h4 style={{ color: '#DC2626', fontWeight: 800, marginBottom: '6px' }}>✕ Không bao gồm:</h4>
-                    <ul style={{ margin: 0, paddingLeft: '16px', color: '#475569' }}>
+                    <h4 style={{ color: 'var(--rose-600)', fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <X size={14} strokeWidth={2} /> Không bao gồm:
+                    </h4>
+                    <ul style={{ margin: 0, paddingLeft: '16px', color: 'var(--zinc-600)' }}>
                       <li>Chi phí cá nhân: giặt ủi, minibar, đồ uống ngoài</li>
                       <li>Phụ thu phòng đơn (nếu ở 1 mình)</li>
                       <li>Tiền tip bồi dưỡng cho HDV và tài xế</li>
@@ -685,15 +713,23 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
                       Áp dụng
                     </button>
                   </div>
-                  {voucherApplied && <div style={{ fontSize: '12px', color: '#16A34A', fontWeight: 700, marginTop: '4px' }}>✓ {voucherApplied}</div>}
-                  {voucherError && <div style={{ fontSize: '12px', color: '#DC2626', fontWeight: 600, marginTop: '4px' }}>✕ {voucherError}</div>}
+                  {voucherApplied && (
+                    <div style={{ fontSize: '12px', color: 'var(--emerald-600)', fontWeight: 600, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Check size={12} strokeWidth={2} /> {voucherApplied}
+                    </div>
+                  )}
+                  {voucherError && (
+                    <div style={{ fontSize: '12px', color: 'var(--rose-600)', fontWeight: 600, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <X size={12} strokeWidth={2} /> {voucherError}
+                    </div>
+                  )}
                 </div>
 
                 {/* TỔNG TIỀN */}
-                <div style={{ background: '#EFF6FF', padding: '14px', borderRadius: '10px', marginBottom: '16px', border: '1px solid #BFDBFE' }}>
+                <div style={{ background: 'var(--zinc-50)', padding: '14px', borderRadius: 'var(--radius-md)', marginBottom: '16px', border: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#005BAA' }}>TỔNG CỘNG:</span>
-                    <strong style={{ fontSize: '20px', fontWeight: 900, color: '#005BAA' }}>
+                    <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--zinc-600)' }}>TỔNG CỘNG:</span>
+                    <strong style={{ fontSize: '20px', fontWeight: 800, color: 'var(--zinc-900)' }}>
                       {vnd(finalTotal)}
                     </strong>
                   </div>
@@ -704,9 +740,9 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
                   className="btn btn-primary"
                   onClick={handleBooking}
                   disabled={bookingLoading}
-                  style={{ width: '100%', padding: '14px', background: '#005BAA', borderColor: '#005BAA', fontWeight: 900, fontSize: '15px' }}
+                  style={{ width: '100%', padding: '12px', background: 'var(--zinc-900)', borderColor: 'var(--zinc-900)', fontWeight: 700, fontSize: '14px' }}
                 >
-                  {bookingLoading ? 'Đang gửi...' : '🚀 ĐẶT TOUR & NHẬN VÉ QR'}
+                  {bookingLoading ? 'Đang gửi...' : 'Đặt tour & Nhận vé điện tử'}
                 </button>
               </div>
             </div>
@@ -716,12 +752,26 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
 
       {/* MODAL THANH TOÁN QR SAU KHI ĐẶT THÀNH CÔNG */}
       {createdBooking && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.75)', backdropFilter: 'blur(4px)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div className="card" style={{ maxWidth: '480px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: '18px', background: '#FFFFFF', padding: '24px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.75)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ maxWidth: '480px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', padding: '24px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
             <div style={{ textAlign: 'center', marginBottom: '14px' }}>
-              <div style={{ fontSize: '32px' }}>🎉</div>
-              <h3 style={{ fontSize: '19px', fontWeight: 900, color: '#0F172A', margin: '4px 0' }}>ĐẶT TOUR THÀNH CÔNG!</h3>
-              <p style={{ fontSize: '13px', color: '#64748B', margin: 0 }}>Mã đơn: <strong style={{ color: '#005BAA' }}>{createdBooking.MaDon}</strong></p>
+              <div style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--emerald-50)',
+                color: 'var(--emerald-600)',
+                display: 'grid',
+                placeItems: 'center',
+                margin: '0 auto 10px',
+                border: '1px solid var(--emerald-200)',
+              }}>
+                <CheckCircle2 size={24} strokeWidth={1.5} />
+              </div>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--zinc-900)', margin: '4px 0', letterSpacing: '-0.3px' }}>
+                ĐẶT TOUR THÀNH CÔNG
+              </h3>
+              <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', margin: 0 }}>Mã đơn: <strong style={{ color: 'var(--zinc-900)' }}>{createdBooking.MaDon}</strong></p>
             </div>
 
             <div style={{ textAlign: 'center', background: '#F8FAFC', padding: '10px', borderRadius: '10px', marginBottom: '14px' }}>

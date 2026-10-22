@@ -4,9 +4,10 @@ import Link from 'next/link';
 import CustomerHeader from '@/components/customer/CustomerHeader';
 import CustomerFooter from '@/components/customer/CustomerFooter';
 import CustomerAccountLayout from '@/components/customer/CustomerAccountLayout';
-import { useApi, api } from '@/lib/api';
+import { useApi, api, downloadFile } from '@/lib/api';
 import { Status, vnd, date } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
+import { CreditCard, QrCode, X, Check, Plane, Star } from 'lucide-react';
 
 type Passenger = {
   ChiTietID: number;
@@ -239,7 +240,7 @@ export default function MyBookingsPage() {
             clearInterval(interval);
             setPayModalBooking(null);
             bookingsApi.reload();
-            setToastMsg(`🎉 Đơn hàng ${payModalBooking.MaDon} đã thanh toán thành công qua di động!`);
+            setToastMsg(`Đơn hàng ${payModalBooking.MaDon} đã thanh toán thành công qua di động!`);
           }
         }
       } catch (e) {
@@ -261,20 +262,22 @@ export default function MyBookingsPage() {
           position: 'fixed',
           top: '80px',
           right: '24px',
-          background: toastMsg.includes('THÀNH CÔNG') || toastMsg.includes('thành công') ? '#10B981' : '#EF4444',
+          background: toastMsg.includes('THÀNH CÔNG') || toastMsg.includes('thành công') ? 'var(--emerald-600)' : 'var(--rose-600)',
           color: '#FFFFFF',
-          padding: '14px 22px',
-          borderRadius: '10px',
-          boxShadow: '0 10px 25px -5px rgba(0,0,0,0.2)',
+          padding: '12px 18px',
+          borderRadius: 'var(--radius-md)',
+          boxShadow: 'var(--shadow-md)',
           zIndex: 2000,
-          fontSize: '14px',
-          fontWeight: 700,
+          fontSize: '13.5px',
+          fontWeight: 600,
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
         }}>
           <span>{toastMsg}</span>
-          <button onClick={() => setToastMsg(null)} style={{ background: 'none', border: 'none', color: '#FFF', fontSize: '16px', cursor: 'pointer' }}>✕</button>
+          <button onClick={() => setToastMsg(null)} style={{ background: 'none', border: 'none', color: '#FFF', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+            <X size={14} strokeWidth={1.5} />
+          </button>
         </div>
       )}
 
@@ -284,16 +287,20 @@ export default function MyBookingsPage() {
           bottom: '24px',
           left: '50%',
           transform: 'translateX(-50%)',
-          background: '#0F172A',
+          background: 'var(--zinc-900)',
           color: '#FFFFFF',
-          padding: '10px 20px',
-          borderRadius: '20px',
+          padding: '8px 16px',
+          borderRadius: 'var(--radius-md)',
           fontSize: '13px',
-          fontWeight: 700,
+          fontWeight: 600,
           zIndex: 2000,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          boxShadow: 'var(--shadow-md)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
         }}>
-          ✓ {copySuccess}
+          <Check size={14} strokeWidth={2} />
+          <span>{copySuccess}</span>
         </div>
       )}
 
@@ -379,7 +386,7 @@ export default function MyBookingsPage() {
                       </div>
 
                       <div style={{ display: 'flex', gap: '8px', marginTop: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        <button className="btn btn-outline btn-sm" onClick={() => setSelectedBooking(b)} style={{ fontWeight: 600 }}>
+                        <button className="btn btn-outline btn-sm" onClick={() => setSelectedBooking(b)} style={{ fontWeight: 500, fontSize: '12.5px' }}>
                           Chi tiết
                         </button>
 
@@ -388,9 +395,9 @@ export default function MyBookingsPage() {
                           <button
                             className="btn btn-primary btn-sm"
                             onClick={() => handleOpenPayModal(b)}
-                            style={{ background: '#005BAA', borderColor: '#005BAA', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px' }}
+                            style={{ background: 'var(--zinc-900)', borderColor: 'var(--zinc-900)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px' }}
                           >
-                            <span>💳</span> Thanh toán QR / VNPay / ZaloPay
+                            <CreditCard size={13} strokeWidth={1.5} /> Thanh toán trực tuyến
                           </button>
                         )}
 
@@ -399,9 +406,9 @@ export default function MyBookingsPage() {
                           <button
                             className="btn btn-sm"
                             onClick={() => setTicketModalBooking(b)}
-                            style={{ background: '#10B981', color: '#FFF', border: 'none', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px' }}
+                            style={{ background: 'var(--emerald-600)', color: '#FFF', border: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px' }}
                           >
-                            <span>🎟️</span> Vé điện tử QR
+                            <QrCode size={13} strokeWidth={1.5} /> Vé điện tử QR
                           </button>
                         )}
 
@@ -414,9 +421,9 @@ export default function MyBookingsPage() {
                               setReviewRating(5);
                               setReviewComment('');
                             }}
-                            style={{ background: '#FEF3C7', color: '#B45309', border: '1px solid #FCD34D', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '4px' }}
+                            style={{ background: 'var(--zinc-100)', color: '#B45309', border: '1px solid var(--border)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12.5px' }}
                           >
-                            <span>⭐</span> Đánh giá
+                            <Star size={13} strokeWidth={1.5} fill="#B45309" color="#B45309" /> Đánh giá
                           </button>
                         )}
 
@@ -425,7 +432,7 @@ export default function MyBookingsPage() {
                           <button
                             className="btn btn-sm"
                             onClick={() => handleOpenCancelModal(b)}
-                            style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA', fontWeight: 700 }}
+                            style={{ background: 'var(--rose-50)', color: 'var(--rose-600)', border: '1px solid var(--rose-200)', fontWeight: 500, fontSize: '12.5px' }}
                           >
                             Hủy đơn
                           </button>
@@ -448,14 +455,16 @@ export default function MyBookingsPage() {
       {/* 1. MODAL THANH TOÁN: VIETQR QUÉT ĐIỆN THOẠI & VNPAY SANDBOX */}
       {/* ========================================================================= */}
       {payModalBooking && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', backdropFilter: 'blur(4px)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div className="card" style={{ maxWidth: '520px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: '18px', background: '#FFFFFF', border: '1px solid #CBD5E1', padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ maxWidth: '520px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)', padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: 900, color: '#0F172A', margin: 0 }}>Thanh Toán Đơn Tour</h3>
-                <span style={{ fontSize: '12.5px', color: '#64748B' }}>Mã đơn: <strong>{payModalBooking.MaDon}</strong></span>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', margin: 0 }}>Thanh Toán Đơn Tour</h3>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Mã đơn: <strong>{payModalBooking.MaDon}</strong></span>
               </div>
-              <button className="btn btn-outline btn-sm" onClick={() => setPayModalBooking(null)}>✕</button>
+              <button className="btn btn-outline btn-sm" onClick={() => setPayModalBooking(null)} style={{ padding: '4px 8px' }}>
+                <X size={14} strokeWidth={1.5} />
+              </button>
             </div>
 
             <div style={{ textAlign: 'center', marginBottom: '16px', background: '#F8FAFC', padding: '12px', borderRadius: '10px' }}>
@@ -643,19 +652,23 @@ export default function MyBookingsPage() {
       {/* 2. MODAL VÉ ĐIỆN TỬ MÃ QR CODE (E-TICKET BOARDING PASS) */}
       {/* ========================================================================= */}
       {ticketModalBooking && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', backdropFilter: 'blur(4px)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div className="card" style={{ maxWidth: '480px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: '18px', background: '#FFFFFF', border: '1px solid #CBD5E1', padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ maxWidth: '480px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)', padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: 900, color: '#0F172A', margin: 0 }}>Vé Điện Tử & Thẻ Đoàn</h3>
-                <span style={{ fontSize: '12px', color: '#10B981', fontWeight: 700 }}>✓ VÉ HỢP LỆ — ĐÃ THANH TOÁN</span>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', margin: 0 }}>Vé Điện Tử & Thẻ Đoàn</h3>
+                <span style={{ fontSize: '12px', color: 'var(--emerald-600)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Check size={12} strokeWidth={2} /> VÉ HỢP LỆ — ĐÃ THANH TOÁN
+                </span>
               </div>
-              <button className="btn btn-outline btn-sm" onClick={() => setTicketModalBooking(null)}>✕</button>
+              <button className="btn btn-outline btn-sm" onClick={() => setTicketModalBooking(null)} style={{ padding: '4px 8px' }}>
+                <X size={14} strokeWidth={1.5} />
+              </button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-              {/* MÃ QR VÉ ĐIỆN TỬ: TRỎ ĐẾN LINK CÔNG KHAI TRA CỨU */}
-              <div style={{ background: '#FFFFFF', padding: '12px', borderRadius: '14px', border: '2px solid #005BAA', boxShadow: '0 4px 14px rgba(0,0,0,0.06)' }}>
+              {/* MÃ QR VÉ ĐIỆN TỬ */}
+              <div style={{ background: '#FFFFFF', padding: '12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(`${originUrl}/portal/ticket/${ticketModalBooking.MaDon}`)}`}
@@ -664,25 +677,32 @@ export default function MyBookingsPage() {
                 />
               </div>
 
-              <div style={{ fontSize: '12.5px', color: '#334155', textAlign: 'center', background: '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                📱 <strong>Dùng Camera điện thoại quét mã QR</strong> để mở trang xác thực vé điện tử và điểm danh lên xe / máy bay.
+              <div style={{ fontSize: '12.5px', color: 'var(--zinc-600)', textAlign: 'center', background: 'var(--zinc-50)', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                Dùng Camera điện thoại quét mã QR để mở trang xác thực vé điện tử và điểm danh lên xe / máy bay.
               </div>
 
-              <div style={{ width: '100%', background: '#F8FAFC', padding: '14px', borderRadius: '10px', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ width: '100%', background: 'var(--zinc-50)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontSize: '12.5px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div>Tour: <strong>{ticketModalBooking.LichKhoiHanh?.Tour?.TenTour}</strong></div>
                 <div>Khởi hành: <strong>{new Date(ticketModalBooking.LichKhoiHanh?.NgayKhoiHanh).toLocaleDateString('vi-VN')}</strong></div>
-                <div>Mã vé: <code style={{ color: '#005BAA', fontWeight: 700 }}>{ticketModalBooking.MaDon}</code></div>
+                <div>Mã vé: <code style={{ color: 'var(--zinc-900)', fontWeight: 700 }}>{ticketModalBooking.MaDon}</code></div>
                 <div>Số lượng: <strong>{ticketModalBooking.SoLuongNguoiLon} người lớn{ticketModalBooking.SoLuongTreEm > 0 ? `, ${ticketModalBooking.SoLuongTreEm} trẻ em` : ''}</strong></div>
               </div>
 
-              {/* NÚT MỞ VÉ TOÀN MÀN HÌNH / XEM BOARDING PASS */}
+              {/* NÚT MỞ VÉ TOÀN MÀN HÌNH */}
               <Link
                 href={`/portal/ticket/${ticketModalBooking.MaDon}`}
                 className="btn btn-primary"
-                style={{ width: '100%', padding: '12px', background: '#005BAA', borderColor: '#005BAA', fontSize: '14px', fontWeight: 800, textAlign: 'center', textDecoration: 'none' }}
+                style={{ width: '100%', padding: '10px', background: 'var(--zinc-900)', borderColor: 'var(--zinc-900)', fontSize: '13.5px', fontWeight: 600, textAlign: 'center', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
               >
-                ✈️ Xem & In Thẻ Boarding Pass Đầy Đủ
+                <Plane size={14} strokeWidth={1.5} /> Xem & In Thẻ Boarding Pass
               </Link>
+              <button
+                className="btn btn-outline"
+                style={{ width: '100%', padding: '12px', marginTop: '10px', fontSize: '14px', fontWeight: 800, color: '#C8102E', borderColor: '#C8102E' }}
+                onClick={() => downloadFile(`/export/ticket/pdf/${ticketModalBooking.MaDon}`, `ve-dien-tu-${ticketModalBooking.MaDon}.pdf`).catch((e) => alert(e instanceof Error ? e.message : 'Không thể tải vé PDF'))}
+              >
+                Tải Vé PDF (Boarding Pass)
+              </button>
             </div>
           </div>
         </div>
@@ -690,25 +710,27 @@ export default function MyBookingsPage() {
 
       {/* MODAL CHI TIẾT ĐƠN HÀNG */}
       {selectedBooking && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(4px)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-          <div className="card" style={{ maxWidth: '520px', width: '100%', padding: '24px', borderRadius: '14px', background: '#FFFFFF' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #E2E8F0' }}>
-              <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#0F172A', margin: 0 }}>Chi tiết đơn #{selectedBooking.MaDon}</h3>
-              <button className="btn btn-outline btn-sm" onClick={() => setSelectedBooking(null)}>✕</button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.65)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ maxWidth: '520px', width: '100%', padding: '24px', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', margin: 0 }}>Chi tiết đơn #{selectedBooking.MaDon}</h3>
+              <button className="btn btn-outline btn-sm" onClick={() => setSelectedBooking(null)} style={{ padding: '4px 8px' }}>
+                <X size={14} strokeWidth={1.5} />
+              </button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13.5px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
               <div>Tour: <strong>{selectedBooking.LichKhoiHanh?.Tour?.TenTour}</strong></div>
               <div>Thời gian: <strong>{selectedBooking.LichKhoiHanh?.Tour?.ThoiGian}</strong></div>
               <div>Ngày khởi hành: <strong>{new Date(selectedBooking.LichKhoiHanh?.NgayKhoiHanh).toLocaleDateString('vi-VN')}</strong></div>
               <div>Số lượng: <strong>{selectedBooking.SoLuongNguoiLon} người lớn{selectedBooking.SoLuongTreEm > 0 ? `, ${selectedBooking.SoLuongTreEm} trẻ em` : ''}</strong></div>
-              <div>Tổng tiền: <strong style={{ color: '#005BAA', fontSize: '16px' }}>{vnd(selectedBooking.TongTien)}</strong></div>
+              <div>Tổng tiền: <strong style={{ color: 'var(--zinc-900)', fontSize: '16px' }}>{vnd(selectedBooking.TongTien)}</strong></div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
                 <span>Trạng thái:</span>
                 <Status value={selectedBooking.TrangThaiDon} />
               </div>
             </div>
             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
-              <button className="btn btn-outline" onClick={() => setSelectedBooking(null)}>Đóng</button>
+              <button className="btn btn-outline btn-sm" onClick={() => setSelectedBooking(null)}>Đóng</button>
               {selectedBooking.TrangThaiDon !== 'Da huy' && selectedBooking.TrangThaiDon !== 'Hoan thanh' && (
                 <button
                   className="btn btn-sm"
@@ -717,7 +739,7 @@ export default function MyBookingsPage() {
                     setSelectedBooking(null);
                     handleOpenCancelModal(b);
                   }}
-                  style={{ background: '#FEE2E2', color: '#DC2626', border: '1px solid #FECACA', fontWeight: 700 }}
+                  style={{ background: 'var(--rose-50)', color: 'var(--rose-600)', border: '1px solid var(--rose-200)', fontWeight: 500 }}
                 >
                   Hủy đơn này
                 </button>
@@ -732,15 +754,24 @@ export default function MyBookingsPage() {
                     setReviewRating(5);
                     setReviewComment('');
                   }}
-                  style={{ background: '#FEF3C7', color: '#B45309', border: '1px solid #FCD34D', fontWeight: 800 }}
+                  style={{ background: 'var(--zinc-100)', color: '#B45309', border: '1px solid var(--border)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                 >
-                  ⭐ Đánh giá
+                  <Star size={13} strokeWidth={1.5} fill="#B45309" color="#B45309" /> Đánh giá
                 </button>
               )}
               {(selectedBooking.TrangThaiDon === 'Da thanh toan' || selectedBooking.TrangThaiDon === 'Da dat coc') && (
-                <Link href={`/portal/ticket/${selectedBooking.MaDon}`} className="btn btn-primary" style={{ background: '#10B981', borderColor: '#10B981', textDecoration: 'none', fontWeight: 700 }}>
+                <Link href={`/portal/ticket/${selectedBooking.MaDon}`} className="btn btn-primary btn-sm" style={{ background: 'var(--zinc-900)', borderColor: 'var(--zinc-900)', textDecoration: 'none', fontWeight: 600 }}>
                   Xem Vé QR
                 </Link>
+              )}
+              {(selectedBooking.TrangThaiDon === 'Da thanh toan' || selectedBooking.TrangThaiDon === 'Da dat coc') && (
+                <button
+                  className="btn btn-outline btn-sm"
+                  style={{ fontWeight: 600, color: 'var(--rose-600)', borderColor: 'var(--rose-300)' }}
+                  onClick={() => downloadFile(`/export/ticket/pdf/${selectedBooking.MaDon}`, `ve-dien-tu-${selectedBooking.MaDon}.pdf`).catch((e) => alert(e instanceof Error ? e.message : 'Không thể tải vé PDF'))}
+                >
+                  Tải Vé PDF
+                </button>
               )}
             </div>
           </div>
@@ -751,60 +782,62 @@ export default function MyBookingsPage() {
       {/* 3. MODAL HỦY ĐƠN ĐẶT TOUR & TÍNH PHÍ HOÀN HỦY */}
       {/* ========================================================================= */}
       {cancelModalBooking && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', backdropFilter: 'blur(4px)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div className="card" style={{ maxWidth: '520px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: '18px', background: '#FFFFFF', border: '1px solid #CBD5E1', padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ maxWidth: '520px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)', padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: 900, color: '#DC2626', margin: 0 }}>Hủy Đơn Đặt Tour</h3>
-                <span style={{ fontSize: '12.5px', color: '#64748B' }}>Mã đơn: <strong>{cancelModalBooking.MaDon}</strong></span>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--rose-600)', margin: 0 }}>Hủy Đơn Đặt Tour</h3>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Mã đơn: <strong>{cancelModalBooking.MaDon}</strong></span>
               </div>
-              <button className="btn btn-outline btn-sm" onClick={() => setCancelModalBooking(null)}>✕</button>
+              <button className="btn btn-outline btn-sm" onClick={() => setCancelModalBooking(null)} style={{ padding: '4px 8px' }}>
+                <X size={14} strokeWidth={1.5} />
+              </button>
             </div>
 
-            <div style={{ marginBottom: '16px', background: '#F8FAFC', padding: '14px', borderRadius: '12px', border: '1px solid #E2E8F0', fontSize: '13px' }}>
-              <div style={{ fontWeight: 800, color: '#0F172A', marginBottom: '4px' }}>
+            <div style={{ marginBottom: '16px', background: 'var(--zinc-50)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontSize: '13px' }}>
+              <div style={{ fontWeight: 600, color: 'var(--zinc-900)', marginBottom: '4px' }}>
                 {cancelModalBooking.LichKhoiHanh?.Tour?.TenTour}
               </div>
-              <div style={{ color: '#64748B' }}>
+              <div style={{ color: 'var(--text-muted)' }}>
                 Khởi hành: <strong>{new Date(cancelModalBooking.LichKhoiHanh?.NgayKhoiHanh).toLocaleDateString('vi-VN')}</strong>
               </div>
             </div>
 
             {cancelPreview ? (
               <div style={{ marginBottom: '18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: '10px', padding: '12px', fontSize: '12.5px', color: '#92400E' }}>
-                  <div style={{ fontWeight: 800, marginBottom: '2px' }}>📋 Chính sách hủy lữ hành áp dụng:</div>
+                <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 'var(--radius-md)', padding: '12px', fontSize: '12.5px', color: '#92400E' }}>
+                  <div style={{ fontWeight: 700, marginBottom: '2px' }}>Chính sách hủy lữ hành áp dụng:</div>
                   <div>• {cancelPreview.policyNote} (Còn <strong>{cancelPreview.daysUntil}</strong> ngày đến ngày đi)</div>
                 </div>
 
-                <div style={{ background: '#F8FAFC', borderRadius: '10px', padding: '12px', border: '1px solid #E2E8F0', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ background: 'var(--zinc-50)', borderRadius: 'var(--radius-md)', padding: '12px', border: '1px solid var(--border)', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748B' }}>Tổng tiền đã đóng:</span>
+                    <span style={{ color: 'var(--text-muted)' }}>Tổng tiền đã đóng:</span>
                     <strong>{vnd(cancelPreview.tienGoc)}</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748B' }}>Tỷ lệ hoàn tiền:</span>
-                    <strong style={{ color: cancelPreview.refundPercent > 0 ? '#16A34A' : '#DC2626' }}>{cancelPreview.refundPercent}%</strong>
+                    <span style={{ color: 'var(--text-muted)' }}>Tỷ lệ hoàn tiền:</span>
+                    <strong style={{ color: cancelPreview.refundPercent > 0 ? 'var(--emerald-600)' : 'var(--rose-600)' }}>{cancelPreview.refundPercent}%</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748B' }}>Phí phạt hủy tour:</span>
-                    <span style={{ color: '#DC2626', fontWeight: 700 }}>{vnd(cancelPreview.tienPhat)}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>Phí phạt hủy tour:</span>
+                    <span style={{ color: 'var(--rose-600)', fontWeight: 600 }}>{vnd(cancelPreview.tienPhat)}</span>
                   </div>
-                  <hr style={{ border: 'none', borderTop: '1px solid #E2E8F0', margin: '4px 0' }} />
+                  <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '4px 0' }} />
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
-                    <span style={{ fontWeight: 800, color: '#0F172A' }}>Số tiền hoàn lại cho bạn:</span>
-                    <strong style={{ color: '#16A34A', fontSize: '16px' }}>{vnd(cancelPreview.tienHoan)}</strong>
+                    <span style={{ fontWeight: 700, color: 'var(--zinc-900)' }}>Số tiền hoàn lại cho bạn:</span>
+                    <strong style={{ color: 'var(--emerald-600)', fontSize: '16px' }}>{vnd(cancelPreview.tienHoan)}</strong>
                   </div>
                 </div>
               </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: '20px', color: '#64748B', fontSize: '13px' }}>
+              <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>
                 Đang kiểm tra chính sách hoàn hủy...
               </div>
             )}
 
             <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: 'var(--zinc-900)', marginBottom: '6px' }}>
                 Lý do hủy tour (Bắt buộc):
               </label>
               <textarea
@@ -818,14 +851,14 @@ export default function MyBookingsPage() {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button className="btn btn-outline" onClick={() => setCancelModalBooking(null)} disabled={loadingCancel}>
+              <button className="btn btn-outline btn-sm" onClick={() => setCancelModalBooking(null)} disabled={loadingCancel}>
                 Đóng
               </button>
               <button
-                className="btn btn-primary"
+                className="btn btn-primary btn-sm"
                 onClick={handleConfirmCancel}
                 disabled={loadingCancel || !cancelReason.trim()}
-                style={{ background: '#DC2626', borderColor: '#DC2626', fontWeight: 800 }}
+                style={{ background: 'var(--rose-600)', borderColor: 'var(--rose-600)', fontWeight: 600 }}
               >
                 {loadingCancel ? 'Đang xử lý...' : 'Xác Nhận Hủy Đơn'}
               </button>
@@ -838,14 +871,16 @@ export default function MyBookingsPage() {
       {/* 4. MODAL ĐÁNH GIÁ CHẤT LƯỢNG TOUR */}
       {/* ========================================================================= */}
       {reviewModalBooking && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', backdropFilter: 'blur(4px)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div className="card" style={{ maxWidth: '500px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: '18px', background: '#FFFFFF', border: '1px solid #CBD5E1', padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ maxWidth: '500px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)', padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: 900, color: '#0F172A', margin: 0 }}>Đánh Giá Chuyến Đi</h3>
-                <span style={{ fontSize: '12px', color: '#64748B' }}>Đơn hàng: <strong>{reviewModalBooking.MaDon}</strong></span>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', margin: 0 }}>Đánh Giá Chuyến Đi</h3>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Đơn hàng: <strong>{reviewModalBooking.MaDon}</strong></span>
               </div>
-              <button className="btn btn-outline btn-sm" onClick={() => setReviewModalBooking(null)}>✕</button>
+              <button className="btn btn-outline btn-sm" onClick={() => setReviewModalBooking(null)} style={{ padding: '4px 8px' }}>
+                <X size={14} strokeWidth={1.5} />
+              </button>
             </div>
 
             <div style={{ marginBottom: '16px', background: '#F8FAFC', padding: '12px 14px', borderRadius: '10px', border: '1px solid #E2E8F0', fontSize: '13px' }}>
