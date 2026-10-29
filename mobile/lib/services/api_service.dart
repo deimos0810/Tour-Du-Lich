@@ -160,8 +160,8 @@ class ApiService {
 
   // 8. Đánh giá tour
   static Future<Map<String, dynamic>> submitReview({
+    required int customerId,
     required int donHangId,
-    required int tourId,
     required int soSao,
     required String binhLuan,
   }) async {
@@ -169,8 +169,8 @@ class ApiService {
       Uri.parse('$baseUrl/portal/reviews'),
       headers: await _headers(),
       body: jsonEncode({
+        'customerId': customerId,
         'donHangId': donHangId,
-        'tourId': tourId,
         'soSao': soSao,
         'binhLuan': binhLuan,
       }),
@@ -182,10 +182,46 @@ class ApiService {
     throw Exception(data['message'] ?? 'Không thể gửi đánh giá');
   }
 
-  // 9. Lịch dẫn đoàn cho Hướng Dẫn Viên
+  // 9. Lịch dẫn đoàn cho Hướng Dẫn Viên & Thông tin dịch vụ đi kèm (nhà xe, khách sạn)
   static Future<List<dynamic>> getGuideSchedule(int taiKhoanId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/guide/my-schedule?taiKhoanId=$taiKhoanId'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      if (data is Map && data['lich'] != null) {
+        return data['lich'] as List<dynamic>;
+      }
+      if (data is List) return data;
+    }
+    return [];
+  }
+
+  // 10. Điểm danh / Soát vé QR cho Hướng Dẫn Viên
+  static Future<Map<String, dynamic>> checkinQR({
+    required String code,
+    int? lichId,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/guide/checkin-qr'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'code': code.trim(),
+        if (lichId != null) 'lichId': lichId,
+      }),
+    );
+    final data = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return data;
+    }
+    throw Exception(data['message'] ?? 'Điểm danh không thành công');
+  }
+
+  // 11. Thông báo nhắc lịch khởi hành, nhắc thanh toán, đánh giá sau tour
+  static Future<List<dynamic>> getNotifications(int customerId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/portal/notifications?customerId=$customerId'),
       headers: await _headers(),
     );
     if (response.statusCode == 200) {
@@ -194,25 +230,49 @@ class ApiService {
     return [];
   }
 
-  // 10. Điểm danh / Soát vé QR cho Hướng Dẫn Viên
-  static Future<Map<String, dynamic>> checkinQR({
-    String? maDon,
-    String? maQRVe,
-    int? taiKhoanId,
+  // 12. Xác nhận thanh toán trực tuyến (ZaloPay, VNPAY, Chuyển khoản QR, Tiền mặt)
+  static Future<Map<String, dynamic>> confirmPayment({
+    required String maDon,
+    required String method,
+    String? appTransId,
+    double? amount,
   }) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/guide/checkin-qr'),
+      Uri.parse('$baseUrl/zalopay/confirm'),
       headers: await _headers(),
       body: jsonEncode({
         'maDon': maDon,
-        'maQRVe': maQRVe,
-        'taiKhoanId': taiKhoanId,
+        'method': method,
+        'appTransId': appTransId ?? '${method.toUpperCase()}-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
+        if (amount != null) 'amount': amount,
       }),
     );
     final data = jsonDecode(utf8.decode(response.bodyBytes));
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return data;
     }
-    throw Exception(data['message'] ?? 'Điểm danh không thành công');
+    throw Exception(data['message'] ?? 'Xác nhận thanh toán thất bại');
+  }
+
+  // 13. Khởi tạo thanh toán ZaloPay
+  static Future<Map<String, dynamic>> createZaloPay({
+    required int donHangId,
+    required double amount,
+    String? orderInfo,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/zalopay/create-payment'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'donHangId': donHangId,
+        'amount': amount,
+        'orderInfo': orderInfo ?? 'Thanh toán tour du lịch VietTour',
+      }),
+    );
+    final data = jsonDecode(utf8.decode(response.bodyBytes));
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return data;
+    }
+    throw Exception(data['message'] ?? 'Khởi tạo ZaloPay thất bại');
   }
 }

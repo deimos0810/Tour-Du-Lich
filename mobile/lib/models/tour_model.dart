@@ -115,10 +115,17 @@ class BookingModel {
     required this.ngayKhoiHanh,
     required this.tourId,
     this.hanhKhach = const [],
+    this.diemKhoiHanh,
+    this.diemDen,
+    this.ngayKetThuc,
+    this.tienCoc = 0,
+    this.tienConLai = 0,
+    this.rawJson,
   });
 
   factory BookingModel.fromJson(Map<String, dynamic> json) {
-    final tour = json['LichKhoiHanh']?['Tour'];
+    final lich = json['LichKhoiHanh'];
+    final tour = lich?['Tour'];
     return BookingModel(
       donHangId: json['DonHangID'] ?? 0,
       maDon: json['MaDon'] ?? '',
@@ -131,8 +138,14 @@ class BookingModel {
       phuongThucTT: json['PhuongThucTT'],
       tenTour: tour?['TenTour'] ?? 'Tour Du Lịch',
       hinhAnhTour: tour?['HinhAnhURL'],
-      ngayKhoiHanh: json['LichKhoiHanh']?['NgayKhoiHanh'] ?? '',
+      ngayKhoiHanh: lich?['NgayKhoiHanh'] ?? '',
       tourId: tour?['TourID'] ?? 0,
+      diemKhoiHanh: tour?['DiemKhoiHanh'] ?? 'TP. Hồ Chí Minh',
+      diemDen: tour?['DiemDen'] ?? '',
+      ngayKetThuc: lich?['NgayKetThuc'],
+      tienCoc: double.tryParse(json['TienCoc']?.toString() ?? '0') ?? 0,
+      tienConLai: double.tryParse(json['TienConLai']?.toString() ?? '0') ?? 0,
+      rawJson: json,
       hanhKhach: json['ChiTietHanhKhach'] != null
           ? (json['ChiTietHanhKhach'] as List)
               .map((p) => PassengerModel.fromJson(p))
@@ -140,6 +153,13 @@ class BookingModel {
           : [],
     );
   }
+
+  final String? diemKhoiHanh;
+  final String? diemDen;
+  final String? ngayKetThuc;
+  final double tienCoc;
+  final double tienConLai;
+  final Map<String, dynamic>? rawJson;
 }
 
 class PassengerModel {
@@ -167,6 +187,84 @@ class PassengerModel {
       cccd: json['CCCD'],
       maQRVe: json['MaQRVe'],
       trangThaiDiemDanh: json['TrangThaiDiemDanh'] ?? 0,
+    );
+  }
+}
+
+// Model cho Thông báo (Nhắc lịch khởi hành, nhắc thanh toán, đánh giá)
+class NotificationModel {
+  final String loai; // NHAC_LICH, THANH_TOAN, DANH_GIA
+  final String tieuDe;
+  final String noiDung;
+  final String maDon;
+  final int donHangId;
+  final DateTime thoiGian;
+
+  NotificationModel({
+    required this.loai,
+    required this.tieuDe,
+    required this.noiDung,
+    required this.maDon,
+    required this.donHangId,
+    required this.thoiGian,
+  });
+
+  factory NotificationModel.fromJson(Map<String, dynamic> json) {
+    return NotificationModel(
+      loai: json['loai'] ?? 'NHAC_LICH',
+      tieuDe: json['tieuDe'] ?? '',
+      noiDung: json['noiDung'] ?? '',
+      maDon: json['maDon'] ?? '',
+      donHangId: json['donHangId'] ?? 0,
+      thoiGian: json['thoiGian'] != null
+          ? DateTime.tryParse(json['thoiGian'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+    );
+  }
+}
+
+// Model dịch vụ đi kèm (Nhà xe, khách sạn) cho Hướng Dẫn Viên
+class SupplierServiceModel {
+  final int nccId;
+  final String tenNCC;
+  final String loaiNCC; // Khach san, Xe van chuyen, Nha hang
+  final String soDienThoai;
+  final String? diaChi;
+  final String? email;
+  final String? maPhieu;
+  final String? tenDichVu;
+  final double? tongTien;
+
+  SupplierServiceModel({
+    required this.nccId,
+    required this.tenNCC,
+    required this.loaiNCC,
+    required this.soDienThoai,
+    this.diaChi,
+    this.email,
+    this.maPhieu,
+    this.tenDichVu,
+    this.tongTien,
+  });
+
+  factory SupplierServiceModel.fromJson(Map<String, dynamic> json) {
+    final ncc = json['NhaCungCap'] ?? {};
+    final chiTietList = json['ChiTiet'] as List? ?? [];
+    String tenDV = '';
+    if (chiTietList.isNotEmpty && chiTietList.first['DichVu'] != null) {
+      tenDV = chiTietList.first['DichVu']['TenDichVu'] ?? '';
+    }
+
+    return SupplierServiceModel(
+      nccId: ncc['NhaCungCapID'] ?? json['NhaCungCapID'] ?? 0,
+      tenNCC: ncc['TenNCC'] ?? json['TenNCC'] ?? 'Nhà cung cấp',
+      loaiNCC: ncc['LoaiNCC'] ?? json['LoaiNCC'] ?? 'Dịch vụ đi kèm',
+      soDienThoai: ncc['SoDienThoai'] ?? json['SoDienThoai'] ?? '0901234567',
+      diaChi: ncc['DiaChi'] ?? json['DiaChi'],
+      email: ncc['Email'] ?? json['Email'],
+      maPhieu: json['MaPhieu'],
+      tenDichVu: tenDV.isNotEmpty ? tenDV : null,
+      tongTien: double.tryParse(json['TongTienDichVu']?.toString() ?? '0'),
     );
   }
 }

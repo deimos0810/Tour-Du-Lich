@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/tour_model.dart';
 import '../services/api_service.dart';
+import 'payment_screen.dart';
 
 class TourDetailScreen extends StatefulWidget {
   final int tourId;
@@ -363,13 +364,81 @@ class _BookingModalState extends State<BookingModal> {
 
       if (mounted) {
         Navigator.pop(context); // đóng modal
+
+        final totalCost = (_adults * widget.tour.giaNguoiLon) + (_children * widget.tour.giaTreEm);
+        final bookingData = BookingModel(
+          donHangId: res['DonHangID'] ?? 0,
+          maDon: res['MaDon'] ?? '',
+          ngayDat: DateTime.now().toIso8601String(),
+          soLuongNguoiLon: _adults,
+          soLuongTreEm: _children,
+          tongTien: double.tryParse(res['TongTien']?.toString() ?? '') ?? totalCost,
+          giamGia: double.tryParse(res['GiamGia']?.toString() ?? '0'),
+          trangThaiDon: 'Cho thanh toan',
+          tenTour: widget.tour.tenTour,
+          ngayKhoiHanh: widget.tour.lichKhoiHanh
+              .firstWhere(
+                (l) => l.lichId == _selectedLichId,
+                orElse: () => DepartureScheduleModel(
+                  lichId: 1,
+                  maLich: 'LICH',
+                  ngayKhoiHanh: DateTime.now().toIso8601String(),
+                  soChoToiDa: 30,
+                  soChoDaDat: 0,
+                ),
+              )
+              .ngayKhoiHanh,
+          tourId: widget.tour.tourId,
+        );
+
         showDialog(
           context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('🎉 Đặt Tour Thành Công!'),
-            content: Text('Mã đơn hàng của bạn là: ${res['MaDon']}.\nVé điện tử QR đã được kích hoạt trong mục Đơn Của Tôi.'),
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Column(
+              children: [
+                Icon(Icons.celebration, color: Color(0xFF005BAA), size: 48),
+                SizedBox(height: 8),
+                Text('Đặt Tour Thành Công!', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Mã đơn hàng: ${res['MaDon']}',
+                  style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF005BAA), fontSize: 15),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Bạn có thể thanh toán trực tuyến ngay bây giờ (ZaloPay, VNPAY, Chuyển khoản VietQR) để nhận vé điện tử QR.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12.5, color: Color(0xFF475569)),
+                ),
+              ],
+            ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Đóng')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Để Sau'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PaymentScreen(booking: bookingData, user: widget.user),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.payment, size: 16),
+                label: const Text('Thanh Toán Ngay'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF005BAA),
+                  foregroundColor: Colors.white,
+                ),
+              ),
             ],
           ),
         );

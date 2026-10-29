@@ -4,7 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/tour_model.dart';
 import '../services/api_service.dart';
 import 'guide_schedule_screen.dart';
+import 'invoice_screen.dart';
 import 'login_screen.dart';
+import 'notifications_screen.dart';
+import 'payment_screen.dart';
 import 'ticket_qr_screen.dart';
 import 'tour_detail_screen.dart';
 
@@ -117,6 +120,20 @@ class _ExploreToursTabState extends State<ExploreToursTab> {
             const Text('VietTour Travel', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            tooltip: 'Thông báo & Nhắc lịch',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => NotificationsScreen(user: widget.user),
+                ),
+              );
+            },
+          ),
+        ],
         backgroundColor: const Color(0xFF005BAA),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -339,18 +356,28 @@ class _MyBookingsTabState extends State<MyBookingsTab> {
             ElevatedButton(
               onPressed: () async {
                 if (commentCtrl.text.trim().isEmpty) return;
-                await ApiService.submitReview(
-                  donHangId: b.donHangId,
-                  tourId: b.tourId,
-                  soSao: stars,
-                  binhLuan: commentCtrl.text.trim(),
-                );
-                if (!ctx.mounted) return;
-                Navigator.pop(ctx);
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Cảm ơn bạn đã gửi đánh giá!')),
-                );
+                try {
+                  final customerId = widget.user?['customerId'] ?? 1;
+                  await ApiService.submitReview(
+                    customerId: customerId,
+                    donHangId: b.donHangId,
+                    soSao: stars,
+                    binhLuan: commentCtrl.text.trim(),
+                  );
+                  if (!ctx.mounted) return;
+                  Navigator.pop(ctx);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Cảm ơn bạn đã gửi đánh giá!')),
+                  );
+                } catch (e) {
+                  if (!ctx.mounted) return;
+                  Navigator.pop(ctx);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+                  );
+                }
               },
               child: const Text('Gửi Đánh Giá'),
             ),
@@ -424,6 +451,32 @@ class _MyBookingsTabState extends State<MyBookingsTab> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            tooltip: 'Thông báo & Nhắc lịch',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => NotificationsScreen(
+                    user: widget.user,
+                    onOpenTicket: (maDon) {
+                      final found = _bookings.where((item) => item.maDon == maDon).toList();
+                      if (found.isNotEmpty) {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => TicketQrScreen(booking: found.first)));
+                      }
+                    },
+                    onOpenReview: (donHangId, maDon) {
+                      final found = _bookings.where((item) => item.donHangId == donHangId).toList();
+                      if (found.isNotEmpty) {
+                        _openReviewDialog(found.first);
+                      }
+                    },
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchBookings),
         ],
       ),
@@ -488,13 +541,54 @@ class _MyBookingsTabState extends State<MyBookingsTab> {
                                   if (b.trangThaiDon != 'Da huy')
                                     TextButton(
                                       onPressed: () => _openCancelDialog(b),
-                                      child: const Text('Hủy đơn', style: TextStyle(color: Colors.red, fontSize: 13)),
+                                      child: const Text('Hủy', style: TextStyle(color: Colors.red, fontSize: 12.5)),
+                                    ),
+                                  if (!isPaid && b.trangThaiDon != 'Da huy')
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => PaymentScreen(
+                                              booking: b,
+                                              user: widget.user,
+                                              onPaymentSuccess: _fetchBookings,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      icon: const Icon(Icons.payment, size: 14),
+                                      label: const Text('Thanh Toán', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF005BAA),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
                                     ),
                                   if (isPaid) ...[
                                     TextButton(
                                       onPressed: () => _openReviewDialog(b),
-                                      child: const Text('⭐ Đánh giá', style: TextStyle(color: Color(0xFFD97706), fontSize: 13, fontWeight: FontWeight.w700)),
+                                      child: const Text('⭐ Đánh giá', style: TextStyle(color: Color(0xFFD97706), fontSize: 12, fontWeight: FontWeight.w700)),
                                     ),
+                                    OutlinedButton.icon(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => InvoiceScreen(booking: b, user: widget.user),
+                                          ),
+                                        );
+                                      },
+                                      icon: const Icon(Icons.receipt_long, size: 14, color: Color(0xFF005BAA)),
+                                      label: const Text('Hóa Đơn', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF005BAA))),
+                                      style: OutlinedButton.styleFrom(
+                                        side: const BorderSide(color: Color(0xFF005BAA)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
                                     ElevatedButton.icon(
                                       onPressed: () {
                                         Navigator.push(
@@ -504,11 +598,12 @@ class _MyBookingsTabState extends State<MyBookingsTab> {
                                           ),
                                         );
                                       },
-                                      icon: const Icon(Icons.qr_code, size: 16),
-                                      label: const Text('Vé QR'),
+                                      icon: const Icon(Icons.qr_code, size: 14),
+                                      label: const Text('Vé QR', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: const Color(0xFF16A34A),
                                         foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                       ),
                                     ),

@@ -47,14 +47,15 @@ export class ZaloPayService {
   /**
    * Callback xác nhận thanh toán thành công từ ZaloPay
    */
-  async confirmPayment(body: { maDon: string; appTransId?: string; amount?: number }) {
+  async confirmPayment(body: { maDon: string; appTransId?: string; amount?: number; method?: string }) {
     const don = await this.prisma.donDatTour.findUnique({
       where: { MaDon: body.maDon },
     });
     if (!don) throw new BadRequestException('Không tìm thấy đơn hàng');
 
     const phaiThu = Number(don.TongTien) - Number(don.GiamGia);
-    const transId = body.appTransId || `ZP-${Date.now().toString().slice(-8)}`;
+    const method = body.method || 'ZaloPay';
+    const transId = body.appTransId || `${method.slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-8)}`;
 
     const result = await this.prisma.$transaction(async (tx) => {
       // Khóa dòng đơn để callback gọi lặp không ghi nhận thanh toán trùng
@@ -68,10 +69,10 @@ export class ZaloPayService {
         data: {
           DonHangID: don.DonHangID,
           SoTien: phaiThu,
-          HinhThucTT: 'ZaloPay',
+          HinhThucTT: method,
           MaGiaoDich: transId,
           TrangThai: 'Thanh cong',
-          GhiChu: `Thanh toán qua Ví điện tử ZaloPay (Mã GD: ${transId})`,
+          GhiChu: `Thanh toán qua ${method} (Mã GD: ${transId})`,
         },
       });
 
@@ -82,7 +83,7 @@ export class ZaloPayService {
           TienCoc: phaiThu,
           TienConLai: 0,
           TrangThaiDon: 'Da thanh toan',
-          PhuongThucTT: 'ZaloPay',
+          PhuongThucTT: method,
         },
       });
 
@@ -110,7 +111,7 @@ export class ZaloPayController {
   }
 
   @Post('confirm')
-  confirm(@Body() body: { maDon: string; appTransId?: string; amount?: number }) {
+  confirm(@Body() body: { maDon: string; appTransId?: string; amount?: number; method?: string }) {
     return this.service.confirmPayment(body);
   }
 }
