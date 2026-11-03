@@ -262,13 +262,30 @@ export default function UsersPage() {
                       </td>
                       <td>
                         <div className="actions" style={{ justifyContent: 'flex-end' }}>
-                          <button
-                            className="btn btn-outline btn-sm"
-                            onClick={() => handleOpenRoleModal(u)}
-                            title="Phân quyền vai trò"
-                          >
-                            Quyền
-                          </button>
+                          {u.VaiTro.includes('Admin') ? (
+                            <span
+                              style={{
+                                fontSize: '11.5px',
+                                padding: '5px 10px',
+                                borderRadius: '6px',
+                                background: '#F8FAFC',
+                                color: '#64748B',
+                                border: '1px solid #E2E8F0',
+                                fontWeight: 600,
+                              }}
+                              title="Tài khoản Quản trị viên tối cao (Admin) được bảo vệ mặc định, không thể hạ quyền"
+                            >
+                              Quyền cố định
+                            </span>
+                          ) : (
+                            <button
+                              className="btn btn-outline btn-sm"
+                              onClick={() => handleOpenRoleModal(u)}
+                              title="Phân quyền vai trò"
+                            >
+                              Quyền
+                            </button>
+                          )}
                           <button
                             className="btn btn-outline btn-sm"
                             onClick={() => {
@@ -285,8 +302,10 @@ export default function UsersPage() {
                             style={{
                               color: u.TrangThai === 1 ? '#DC2626' : '#16A34A',
                               borderColor: u.TrangThai === 1 ? '#FCA5A5' : '#86EFAC',
+                              opacity: isCurrent || u.VaiTro.includes('Admin') ? 0.45 : 1,
+                              cursor: isCurrent || u.VaiTro.includes('Admin') ? 'not-allowed' : 'pointer',
                             }}
-                            disabled={isCurrent}
+                            disabled={isCurrent || u.VaiTro.includes('Admin')}
                           >
                             {u.TrangThai === 1 ? 'Khóa' : 'Mở'}
                           </button>
@@ -343,34 +362,54 @@ export default function UsersPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
               {['Admin', 'Dieu hanh', 'Ke toan', 'HDV', 'Khach hang'].map((role) => {
                 const checked = selectedRoles.includes(role);
+                const isLockedAdmin = role === 'Admin' && editingRoleUser.VaiTro.includes('Admin');
                 return (
                   <label
                     key={role}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
+                      justifyContent: 'space-between',
                       gap: '10px',
                       padding: '10px 14px',
                       borderRadius: '8px',
-                      border: checked ? '1px solid #0D6EFD' : '1px solid #E2E8F0',
-                      background: checked ? '#EFF6FF' : '#FFFFFF',
-                      cursor: 'pointer',
+                      border: checked ? '1px solid #0F172A' : '1px solid #E2E8F0',
+                      background: checked ? '#F8FAFC' : '#FFFFFF',
+                      cursor: isLockedAdmin ? 'not-allowed' : 'pointer',
                       fontWeight: checked ? 700 : 500,
                       fontSize: '13.5px',
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedRoles([...selectedRoles, role]);
-                        } else {
-                          setSelectedRoles(selectedRoles.filter((r) => r !== role));
-                        }
-                      }}
-                    />
-                    <span>{role}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={isLockedAdmin}
+                        onChange={(e) => {
+                          if (isLockedAdmin) return;
+                          if (e.target.checked) {
+                            setSelectedRoles([...selectedRoles, role]);
+                          } else {
+                            setSelectedRoles(selectedRoles.filter((r) => r !== role));
+                          }
+                        }}
+                      />
+                      <span>{role}</span>
+                    </div>
+                    {isLockedAdmin && (
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          padding: '2px 7px',
+                          borderRadius: '4px',
+                          background: '#FEF3C7',
+                          color: '#B45309',
+                          fontWeight: 700,
+                        }}
+                      >
+                        Mặc định (Không thể gỡ)
+                      </span>
+                    )}
                   </label>
                 );
               })}

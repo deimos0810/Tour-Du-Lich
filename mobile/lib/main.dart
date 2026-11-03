@@ -1,65 +1,66 @@
-import 'dart:convert';
+import 'package:device_preview_plus/device_preview_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'views/home_screen.dart';
-import 'views/login_screen.dart';
+import 'package:get/get.dart';
+import 'package:sizer/sizer.dart';
+import 'core/constants/app_routes.dart';
+import 'core/controllers/app_controller.dart';
+import 'core/localization/app_translations.dart';
+import 'core/theme/app_theme.dart';
+import 'routes/app_pages.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  final prefs = await SharedPreferences.getInstance();
-  final userDataStr = prefs.getString('user_data');
-  Map<String, dynamic>? initialUser;
-  if (userDataStr != null) {
-    try {
-      initialUser = jsonDecode(userDataStr);
-    } catch (_) {}
-  }
-
-  runApp(VietTourMobileApp(initialUser: initialUser));
+  runApp(const VietTourApp());
 }
 
-class VietTourMobileApp extends StatelessWidget {
-  final Map<String, dynamic>? initialUser;
-
-  const VietTourMobileApp({super.key, this.initialUser});
+class VietTourApp extends StatelessWidget {
+  const VietTourApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    const primaryColor = Color(0xFF005BAA);
+    final usePreview =
+        !kReleaseMode &&
+        defaultTargetPlatform != TargetPlatform.android &&
+        defaultTargetPlatform != TargetPlatform.iOS;
 
-    return MaterialApp(
-      title: 'VietTour Mobile',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: primaryColor,
-          primary: primaryColor,
-          surface: Colors.white,
+    if (!usePreview) {
+      return Sizer(
+        builder: (context, orientation, deviceType) => GetMaterialApp(
+          title: 'VietTour',
+          debugShowCheckedModeBanner: false,
+          translations: AppTranslations(),
+          locale: const Locale('vi', 'VN'),
+          fallbackLocale: const Locale('vi', 'VN'),
+          theme: AppTheme.light,
+          initialRoute: AppRoutes.splash,
+          getPages: AppPages.pages,
+          initialBinding: AppBinding(),
+          defaultTransition: Transition.fadeIn,
+          transitionDuration: const Duration(milliseconds: 120),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: primaryColor,
-          foregroundColor: Colors.white,
-          centerTitle: false,
-          elevation: 0,
-        ),
-        cardTheme: CardThemeData(
-          elevation: 2,
-          shadowColor: Colors.black12,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          color: Colors.white,
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primaryColor,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
+      );
+    }
+
+    return DevicePreview(
+      enabled: true,
+      builder: (previewContext) => Sizer(
+        builder: (context, orientation, deviceType) => GetMaterialApp(
+          title: 'VietTour',
+          debugShowCheckedModeBanner: false,
+          translations: AppTranslations(),
+          locale: const Locale('vi', 'VN'),
+          fallbackLocale: const Locale('vi', 'VN'),
+          useInheritedMediaQuery: true,
+          builder: DevicePreview.appBuilder,
+          theme: AppTheme.light,
+          initialRoute: AppRoutes.splash,
+          getPages: AppPages.pages,
+          initialBinding: AppBinding(),
+          defaultTransition: Transition.fadeIn,
+          transitionDuration: const Duration(milliseconds: 120),
         ),
       ),
-      home: initialUser != null ? HomeScreen(user: initialUser) : const LoginScreen(),
     );
   }
 }

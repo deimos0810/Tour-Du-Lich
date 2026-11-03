@@ -2,20 +2,86 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { api } from '@/lib/api';
 import CustomerAccountDropdown from './CustomerAccountDropdown';
 import LogoutModal from './LogoutModal';
-import { QrCode, LayoutDashboard, ChevronDown, Phone, Mail, Clock } from 'lucide-react';
+import CancellationNoticeModal, { CancellationNotice } from './CancellationNoticeModal';
+import { QrCode, LayoutDashboard, ChevronDown, Phone, Mail, Clock, Bell, AlertTriangle } from 'lucide-react';
 
 export default function CustomerHeader() {
   const { user, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [activeNav, setActiveNav] = useState<string>('ALL');
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const syncNav = () => {
+      if (typeof window === 'undefined') return;
+      const params = new URLSearchParams(window.location.search);
+      const cat = params.get('category');
+      if (window.location.hash === '#about') {
+        setActiveNav('ABOUT');
+      } else if (cat) {
+        setActiveNav(cat);
+      } else {
+        setActiveNav('ALL');
+      }
+    };
+    syncNav();
+    const onCustomNav = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.category) setActiveNav(detail.category);
+    };
+    window.addEventListener('popstate', syncNav);
+    window.addEventListener('viettour:nav-filter', onCustomNav);
+    return () => {
+      window.removeEventListener('popstate', syncNav);
+      window.removeEventListener('viettour:nav-filter', onCustomNav);
+    };
+  }, []);
+
+  const handleNavClick = (
+    e: React.MouseEvent<HTMLAnchorElement>,
+    category: string,
+    targetId: string,
+    href: string
+  ) => {
+    if (typeof window !== 'undefined' && window.location.pathname === '/portal') {
+      e.preventDefault();
+      window.history.pushState({}, '', href);
+      setActiveNav(category);
+      window.dispatchEvent(new CustomEvent('viettour:nav-filter', { detail: { category, targetId } }));
+      if (targetId === 'top') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        const el = document.getElementById(targetId);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  };
+
+  // Thông báo hủy đơn
+  const [notices, setNotices] = useState<CancellationNotice[]>([]);
+  const [noticesOpen, setNoticesOpen] = useState(false);
+  const noticesRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!user || !user.customerId) return;
+    api<CancellationNotice[]>(`/portal/cancellation-notices?customerId=${user.customerId}`)
+      .then((data) => {
+        if (Array.isArray(data)) setNotices(data);
+      })
+      .catch(() => {});
+  }, [user]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setDropdownOpen(false);
+      }
+      if (noticesRef.current && !noticesRef.current.contains(event.target as Node)) {
+        setNoticesOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -175,93 +241,35 @@ export default function CustomerHeader() {
           </Link>
 
           {/* NAVIGATION */}
-          <nav style={{ display: 'flex', alignItems: 'center', gap: '24px', whiteSpace: 'nowrap' }}>
-            <Link
-              href="/portal"
-              style={{
-                textDecoration: 'none',
-                color: 'var(--zinc-900)',
-                fontWeight: 600,
-                fontSize: '13.5px',
-              }}
-            >
-              Trang chủ
-            </Link>
-
-            <Link
-              href="/portal?category=MIEN_TRUNG#tours"
-              style={{
-                textDecoration: 'none',
-                color: 'var(--zinc-600)',
-                fontWeight: 500,
-                fontSize: '13.5px',
-                transition: 'color 0.15s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--zinc-900)')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--zinc-600)')}
-            >
-              Tour Miền Trung
-            </Link>
-
-            <Link
-              href="/portal?category=MIEN_BAC#tours"
-              style={{
-                textDecoration: 'none',
-                color: 'var(--zinc-600)',
-                fontWeight: 500,
-                fontSize: '13.5px',
-                transition: 'color 0.15s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--zinc-900)')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--zinc-600)')}
-            >
-              Tour Miền Bắc
-            </Link>
-
-            <Link
-              href="/portal?category=QUOC_TE#tours"
-              style={{
-                textDecoration: 'none',
-                color: 'var(--zinc-600)',
-                fontWeight: 500,
-                fontSize: '13.5px',
-                transition: 'color 0.15s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--zinc-900)')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--zinc-600)')}
-            >
-              Tour Quốc Tế
-            </Link>
-
-            <Link
-              href="/portal#promotions"
-              style={{
-                textDecoration: 'none',
-                color: 'var(--zinc-600)',
-                fontWeight: 500,
-                fontSize: '13.5px',
-                transition: 'color 0.15s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--zinc-900)')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--zinc-600)')}
-            >
-              Khuyến mãi
-            </Link>
-
-            <Link
-              href="/portal#about"
-              style={{
-                textDecoration: 'none',
-                color: 'var(--zinc-600)',
-                fontWeight: 500,
-                fontSize: '13.5px',
-                transition: 'color 0.15s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--zinc-900)')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--zinc-600)')}
-            >
-              Về chúng tôi
-            </Link>
+          <nav style={{ display: 'flex', alignItems: 'center', gap: '22px', whiteSpace: 'nowrap' }}>
+            {[
+              { key: 'ALL', label: 'Trang chủ', href: '/portal', targetId: 'top' },
+              { key: 'MIEN_TRUNG', label: 'Tour Miền Trung', href: '/portal?category=MIEN_TRUNG#tour-list-section', targetId: 'tour-list-section' },
+              { key: 'MIEN_BAC', label: 'Tour Miền Bắc', href: '/portal?category=MIEN_BAC#tour-list-section', targetId: 'tour-list-section' },
+              { key: 'QUOC_TE', label: 'Tour Quốc Tế', href: '/portal?category=QUOC_TE#tour-list-section', targetId: 'tour-list-section' },
+              { key: 'KHUYEN_MAI', label: 'Khuyến mãi', href: '/portal?category=KHUYEN_MAI#tour-list-section', targetId: 'tour-list-section' },
+              { key: 'ABOUT', label: 'Về chúng tôi', href: '/portal#about', targetId: 'about' },
+            ].map((item) => {
+              const isActive = activeNav === item.key;
+              return (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  onClick={(e) => handleNavClick(e, item.key, item.targetId, item.href)}
+                  style={{
+                    textDecoration: 'none',
+                    color: isActive ? 'var(--zinc-900)' : 'var(--zinc-600)',
+                    fontWeight: isActive ? 700 : 500,
+                    fontSize: '13.5px',
+                    padding: '6px 2px',
+                    borderBottom: isActive ? '2px solid var(--zinc-900)' : '2px solid transparent',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
 
           {/* ACTIONS */}
@@ -282,6 +290,131 @@ export default function CustomerHeader() {
               <QrCode size={14} strokeWidth={1.5} />
               <span>Vé điện tử QR</span>
             </Link>
+
+            {/* CHUÔNG THÔNG BÁO CHO KHÁCH HÀNG */}
+            {user && (
+              <div style={{ position: 'relative' }} ref={noticesRef}>
+                <button
+                  type="button"
+                  onClick={() => setNoticesOpen(!noticesOpen)}
+                  title="Thông báo đơn đặt tour"
+                  style={{
+                    position: 'relative',
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border)',
+                    background: noticesOpen ? '#fef2f2' : '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: notices.length > 0 ? '#e11d48' : '#64748b',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <Bell size={16} strokeWidth={1.8} />
+                  {notices.length > 0 && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '-3px',
+                        right: '-3px',
+                        background: '#e11d48',
+                        color: '#ffffff',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        width: '16px',
+                        height: '16px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '2px solid #ffffff',
+                      }}
+                    >
+                      {notices.length}
+                    </span>
+                  )}
+                </button>
+
+                {/* Dropdown danh sách thông báo */}
+                {noticesOpen && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 8px)',
+                      right: 0,
+                      width: '320px',
+                      background: '#ffffff',
+                      borderRadius: '12px',
+                      border: '1px solid var(--border)',
+                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.12)',
+                      padding: '12px',
+                      zIndex: 1000,
+                      animation: 'fadeIn 0.15s ease-out',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingBottom: '8px',
+                        borderBottom: '1px solid #f1f5f9',
+                        marginBottom: '8px',
+                      }}
+                    >
+                      <strong style={{ fontSize: '13px', color: '#0f172a' }}>
+                        Thông báo ({notices.length})
+                      </strong>
+                      <Link
+                        href="/portal/my-bookings"
+                        onClick={() => setNoticesOpen(false)}
+                        style={{ fontSize: '11.5px', color: '#0D6EFD', textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        Xem tất cả đơn
+                      </Link>
+                    </div>
+
+                    {notices.length > 0 ? (
+                      <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {notices.map((n) => (
+                          <Link
+                            key={n.donHangId}
+                            href="/portal/my-bookings"
+                            onClick={() => setNoticesOpen(false)}
+                            style={{
+                              textDecoration: 'none',
+                              display: 'block',
+                              background: '#fff1f2',
+                              border: '1px solid #fecdd3',
+                              borderRadius: '8px',
+                              padding: '10px 12px',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#e11d48', fontSize: '12px', fontWeight: 700 }}>
+                              <AlertTriangle size={13} />
+                              <span>Đơn #{n.maDon} đã bị hủy</span>
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#0f172a', fontWeight: 600, marginTop: '3px' }}>
+                              {n.tenTour}
+                            </div>
+                            <div style={{ fontSize: '11.5px', color: '#881337', marginTop: '4px', background: '#ffffff', padding: '6px 8px', borderRadius: '6px' }}>
+                              <strong>Lý do: </strong>{n.lyDoHuy}
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ padding: '16px 0', textAlign: 'center', color: '#94a3b8', fontSize: '12.5px' }}>
+                        Không có thông báo mới nào
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {isStaffOrAdmin && (
               <Link
@@ -378,6 +511,9 @@ export default function CustomerHeader() {
           logout();
         }}
       />
+
+      {/* POPUP THÔNG BÁO TỰ ĐỘNG KHI CÓ ĐƠN BỊ ADMIN HỦY */}
+      <CancellationNoticeModal />
     </>
   );
 }

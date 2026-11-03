@@ -1,13 +1,14 @@
 import { BadRequestException, Body, Controller, Delete, Get, Injectable, Module, NotFoundException, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.module.js';
+import { decorateToursWithPromo } from '../common/promotion.js';
 
-// PHÃ‚N Há»† 2: Quáº£n lÃ½ danh má»¥c tour & lá»‹ch trÃ¬nh
+// PHÂN HỆ 2: Quản lý danh mục tour & lịch trình
 @Injectable()
 export class ToursService {
   constructor(private prisma: PrismaService) {}
 
-  findAll(q: { search?: string; danhMucId?: string; trangThai?: string; diemDen?: string }) {
+  async findAll(q: { search?: string; danhMucId?: string; trangThai?: string; diemDen?: string }) {
     const where: Prisma.TourWhereInput = {
       ...(q.search && {
         OR: [
@@ -19,7 +20,7 @@ export class ToursService {
       ...(q.trangThai && { TrangThaiDuyet: q.trangThai }),
       ...(q.diemDen && { DiemDen: { contains: q.diemDen, mode: 'insensitive' } }),
     };
-    return this.prisma.tour.findMany({
+    const rows = await this.prisma.tour.findMany({
       where,
       include: {
         DanhMuc: true,
@@ -35,6 +36,7 @@ export class ToursService {
       },
       orderBy: { NgayTao: 'desc' },
     });
+    return decorateToursWithPromo(this.prisma, rows);
   }
 
   async findOne(id: number) {
@@ -52,7 +54,8 @@ export class ToursService {
       },
     });
     if (!tour) throw new NotFoundException('Không tìm thấy tour');
-    return tour;
+    const [decorated] = await decorateToursWithPromo(this.prisma, [tour]);
+    return decorated;
   }
 
   /** Chỉ nhận các trường hợp lệ từ form, ép kiểu số và kiểm tra ràng buộc nghiệp vụ. */
@@ -102,13 +105,50 @@ export class ToursService {
       const count = await this.prisma.tour.count();
       maTour = `VT${String(count + 1).padStart(3, '0')}-${Date.now().toString().slice(-4)}`;
     }
-    if (await this.prisma.tour.findUnique({ where: { MaTour: maTour } })) throw new BadRequestException(`Mã tour ${maTour} đã tồn tại`);
-    return this.prisma.tour.create({ data: { ...(data as Prisma.TourUncheckedCreateInput), MaTour: maTour } });
+    if (await this.prisma.tour.findUnique({ where: { MaTour: maTour } })) {
+      throw new BadRequestException(`Mã tour ${maTour} đã tồn tại`);
+    }
+    try {
+      return await this.prisma.tour.create({
+        data: { ...(data as Prisma.TourUncheckedCreateInput), MaTour: maTour },
+      });
+    } catch (err: unknown) {
+      const error = err as { code?: string; message?: string };
+      if (error?.code === 'P2002') {
+        throw new BadRequestException(`Mã tour ${maTour} đã tồn tại trong hệ thống`);
+      }
+      throw new BadRequestException(`Không thể tạo tour: ${error?.message || 'Lỗi CSDL'}`);
+    }
   }
 
   async update(id: number, body: Record<string, unknown>) {
     const data = this.sanitize(body, false);
-    return this.prisma.tour.update({ where: { TourID: id }, data: { ...(data as Prisma.TourUncheckedUpdateInput), NgayCapNhat: new Date() } });
+    if (body.MaTour) {
+      const maTour = String(body.MaTour).trim().toUpperCase();
+      const exist = await this.prisma.tour.findFirst({
+        where: { MaTour: maTour, NOT: { TourID: id } },
+      });
+      if (exist) {
+        throw new BadRequestException(`Mã tour ${maTour} đã được sử dụng bởi một tour khác`);
+      }
+      data.MaTour = maTour;
+    }
+
+    try {
+      return await this.prisma.tour.update({
+        where: { TourID: id },
+        data: { ...(data as Prisma.TourUncheckedUpdateInput), NgayCapNhat: new Date() },
+      });
+    } catch (err: unknown) {
+      const error = err as { code?: string; message?: string };
+      if (error?.code === 'P2002') {
+        throw new BadRequestException('Mã tour đã tồn tại trong hệ thống');
+      }
+      if (error?.code === 'P2025') {
+        throw new NotFoundException('Không tìm thấy tour cần cập nhật');
+      }
+      throw new BadRequestException(`Không thể cập nhật tour: ${error?.message || 'Lỗi CSDL'}`);
+    }
   }
 
   async remove(id: number) {

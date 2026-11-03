@@ -193,7 +193,6 @@ export default function GuidesPage() {
                     <th>Số ngày công</th>
                     <th>Tiền công nhật</th>
                     <th>Phụ cấp đoàn</th>
-                    <th>Thưởng rating</th>
                     <th>Tổng thu nhập</th>
                     <th style={{ textAlign: 'right' }}>Chi tiết</th>
                   </tr>
@@ -215,11 +214,6 @@ export default function GuidesPage() {
                         <td>{vnd(item.tienCong)}</td>
                         <td>{vnd(item.phuCap)}</td>
                         <td>
-                          <span style={{ color: item.thuong > 0 ? '#16A34A' : '#64748B', fontWeight: 600 }}>
-                            {item.thuong > 0 ? `+${vnd(item.thuong)}` : '0đ'}
-                          </span>
-                        </td>
-                        <td>
                           <span style={{ fontSize: '15px', fontWeight: 800, color: '#0D6EFD' }}>
                             {vnd(item.tongThuNhap)}
                           </span>
@@ -235,7 +229,7 @@ export default function GuidesPage() {
                       </tr>
                     ))
                   ) : (
-                    <EmptyRow cols={8} loading={payrollApi.loading} />
+                    <EmptyRow cols={7} loading={payrollApi.loading} />
                   )}
                 </tbody>
               </table>
@@ -304,7 +298,7 @@ export default function GuidesPage() {
                     <th>Số ngày</th>
                     <th>Tiền công</th>
                     <th>Phụ cấp</th>
-                    <th>Rating & Thưởng</th>
+                    <th>Tổng cộng</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -321,22 +315,8 @@ export default function GuidesPage() {
                         <td>{t.soNgay} ngày</td>
                         <td>{vnd(t.tienCong)}</td>
                         <td>{vnd(t.phuCap)}</td>
-                        <td>
-                          {t.diemDanhGia !== null ? (
-                            <div>
-                              <span style={{ color: '#09090B', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                <Star size={12} strokeWidth={1.5} fill="#F59E0B" color="#F59E0B" />
-                                <span>{t.diemDanhGia.toFixed(1)}/5</span>
-                              </span>
-                              {t.thuong > 0 && (
-                                <div style={{ color: '#059669', fontSize: '11px', fontWeight: 600 }}>
-                                  +{vnd(t.thuong)}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="sub">Chưa có đánh giá</span>
-                          )}
+                        <td style={{ fontWeight: 700, color: '#0D6EFD' }}>
+                          {vnd(t.tienCong + t.phuCap)}
                         </td>
                       </tr>
                     ))

@@ -3,11 +3,11 @@ import { useState, use, useEffect } from 'react';
 import Link from 'next/link';
 import CustomerHeader from '@/components/customer/CustomerHeader';
 import CustomerFooter from '@/components/customer/CustomerFooter';
-import { api, useApi } from '@/lib/api';
+import { api, getImageUrl, useApi, getApiUrl } from '@/lib/api';
 import { bookingSchema, firstError } from '@/lib/validations';
 import { vnd } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
-import { Plane, Building2, Utensils, ShieldCheck, Check, X, CheckCircle2, Star } from 'lucide-react';
+import { Plane, Building2, Utensils, ShieldCheck, Check, X, CheckCircle2, Star, Lock, Smartphone } from 'lucide-react';
 
 type Review = {
   DanhGiaID: number;
@@ -47,7 +47,50 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
   const { user } = useAuth();
 
   const tourApi = useApi<Tour>(`/tours/${tourId}`);
+  const vouchersApi = useApi<Array<{
+    VoucherID: number;
+    MaVoucher: string;
+    TenChuongTrinh: string;
+    PhanTramGiam: number | string;
+    GiamToiDa: number | string;
+    GiaTriDonToiThieu: number | string;
+    NgayKetThuc: string;
+    ApDungVoucher?: Array<{ Tour: { TourID: number } }>;
+  }>>('/portal/vouchers');
   const tour = tourApi.data;
+
+  // Đồng hồ thời gian thực (mỗi 1 giây) để tự động gỡ khuyến mãi/voucher ngay khi hết hạn (ngày, giờ, giây)
+  const [nowTs, setNowTs] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const rawPromo = (tour as any)?.KhuyenMai;
+  const activePromo =
+    rawPromo && new Date(rawPromo.NgayKetThuc).getTime() > nowTs ? rawPromo : null;
+
+  const formatPromoCountdown = (endIso: string) => {
+    const diff = new Date(endIso).getTime() - nowTs;
+    if (diff <= 0) return 'Đã kết thúc';
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    if (days > 0) {
+      return `Còn ${days} ngày ${hours} giờ (đến ${new Date(endIso).toLocaleDateString('vi-VN')})`;
+    }
+    return `Còn ${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  const validVouchersForTour = (vouchersApi.data || []).filter((v) => {
+    const endMs = new Date(v.NgayKetThuc).getTime() + 86400000 - 1;
+    if (nowTs > endMs) return false;
+    if (v.ApDungVoucher && v.ApDungVoucher.length > 0 && tour) {
+      return v.ApDungVoucher.some((a) => a.Tour.TourID === tour.TourID);
+    }
+    return true;
+  });
 
   // Booking states
   const [selectedLichId, setSelectedLichId] = useState<number | null>(null);
@@ -122,8 +165,39 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewSuccess, setReviewSuccess] = useState(false);
 
-  // Active departure schedule
-  const activeLichId = selectedLichId || (tour?.LichKhoiHanh && tour.LichKhoiHanh.length > 0 ? tour.LichKhoiHanh[0].LichID : null);
+  // Image lightbox preview
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+
+  // Filter out past / expired departures
+  const [hideExpired, setHideExpired] = useState(true);
+
+  const isDepartureExpired = (l: { NgayKhoiHanh: string; TrangThai?: string }) => {
+    const isPast = new Date(l.NgayKhoiHanh).getTime() < Date.now();
+    const isClosed = ['Dong', 'Hoan thanh', 'Huy'].includes(l.TrangThai || '');
+    return isPast || isClosed;
+  };
+
+  const allDepartures = tour?.LichKhoiHanh || [];
+  const validDepartures = allDepartures.filter((l) => (hideExpired ? !isDepartureExpired(l) : true));
+
+  // Determine active departure: pick first non-expired with remaining seats
+  const defaultDeparture =
+    allDepartures.find((l) => !isDepartureExpired(l) && l.SoChoToiDa - l.SoChoDaDat > 0) ||
+    validDepartures[0] ||
+    allDepartures[0] ||
+    null;
+
+  const activeLichId = selectedLichId !== null ? selectedLichId : defaultDeparture?.LichID || null;
+  const activeSchedule = allDepartures.find((l) => l.LichID === activeLichId) || defaultDeparture;
+
+  const totalSlots = activeSchedule ? activeSchedule.SoChoToiDa : 0;
+  const bookedSeats = activeSchedule ? activeSchedule.SoChoDaDat : 0;
+  const remainingSeats = activeSchedule ? Math.max(0, activeSchedule.SoChoToiDa - activeSchedule.SoChoDaDat) : 0;
+  const totalGuestsSelected = adults + children;
+  const isScheduleExpired = activeSchedule ? isDepartureExpired(activeSchedule) : false;
+  const isSoldOut = activeSchedule ? remainingSeats === 0 : false;
+  const isExceededSeats = activeSchedule ? totalGuestsSelected > remainingSeats : false;
+  const canBook = Boolean(activeSchedule && !isScheduleExpired && !isSoldOut && !isExceededSeats);
 
   const syncPassengersCount = (newAdults: number, newChildren: number) => {
     const total = newAdults + newChildren;
@@ -140,8 +214,25 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
     });
   };
 
-  const rawTotal = tour ? Number(tour.GiaNguoiLon) * adults + Number(tour.GiaTreEm) * children : 0;
+  const giaNL = activePromo ? Number(activePromo.GiaNguoiLonKM) : Number(tour?.GiaNguoiLon || 0);
+  const giaTE = activePromo ? Number(activePromo.GiaTreEmKM) : Number(tour?.GiaTreEm || 0);
+  const rawTotal = tour ? giaNL * adults + giaTE * children : 0;
   const finalTotal = Math.max(rawTotal - voucherDiscount, 0);
+
+  // Tự động kiểm tra lại điều kiện mã giảm giá khi tổng tiền thay đổi hoặc mã hết hạn
+  useEffect(() => {
+    if (!voucherApplied || !voucherCode.trim()) return;
+    const matched = validVouchersForTour.find((v) => v.MaVoucher.toUpperCase() === voucherCode.trim().toUpperCase());
+    if (matched && rawTotal < Number(matched.GiaTriDonToiThieu)) {
+      setVoucherDiscount(0);
+      setVoucherApplied(null);
+      setVoucherError(`Đơn tối thiểu ${vnd(matched.GiaTriDonToiThieu)} để áp dụng mã ${matched.MaVoucher}`);
+    } else if (matched) {
+      const recomputed = Math.min(Math.round((rawTotal * Number(matched.PhanTramGiam)) / 100), Number(matched.GiamToiDa));
+      setVoucherDiscount(recomputed);
+      setVoucherApplied(`${matched.TenChuongTrinh} (-${vnd(recomputed)})`);
+    }
+  }, [rawTotal, nowTs]);
 
   const handleApplyVoucher = async () => {
     if (!voucherCode.trim()) return;
@@ -155,6 +246,7 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
           body: JSON.stringify({
             maKhuyenMai: voucherCode.trim().toUpperCase(),
             tongTien: rawTotal,
+            tourId: tour?.TourID,
           }),
         }
       );
@@ -172,6 +264,17 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
   const handleBooking = async () => {
     if (!tour || !activeLichId) {
       alert('Vui lòng chọn ngày khởi hành!');
+      return;
+    }
+
+    if (!canBook) {
+      if (isScheduleExpired) {
+        alert('Lịch khởi hành này đã qua ngày hoặc đã đóng nhận khách!');
+      } else if (isSoldOut) {
+        alert('Chuyến đi này đã kín chỗ (Hết ghế trống)!');
+      } else if (isExceededSeats) {
+        alert(`Số lượng khách (${totalGuestsSelected} khách) vượt quá số ghế trống còn lại (${remainingSeats} chỗ)! Vui lòng giảm số khách.`);
+      }
       return;
     }
 
@@ -236,16 +339,92 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
     }, 800);
   };
 
-  const parseItineraryDays = (raw: string | null) => {
+  type ItineraryDayItem = {
+    day?: number;
+    title: string;
+    detail: string;
+    image?: string | null;
+    highlights?: string[];
+    meals?: string | null;
+  };
+
+  const parseItineraryDays = (raw: string | null): ItineraryDayItem[] => {
     if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((item, idx) => ({
+          day: item.day || idx + 1,
+          title: item.title || `Ngày ${idx + 1}`,
+          detail: item.detail || '',
+          image: item.image || null,
+          highlights: Array.isArray(item.highlights) ? item.highlights : [],
+          meals: item.meals || null,
+        }));
+      }
+    } catch {
+      // fallback to plain text parsing
+    }
+
     const lines = raw.split(/\r?\n|•/).map((l) => l.trim()).filter(Boolean);
     return lines.map((l, idx) => {
       const parts = l.split(':');
       if (parts.length >= 2) {
-        return { title: parts[0].trim(), detail: parts.slice(1).join(':').trim() };
+        return { day: idx + 1, title: parts[0].trim(), detail: parts.slice(1).join(':').trim() };
       }
-      return { title: `Ngày ${idx + 1}`, detail: l };
+      return { day: idx + 1, title: `Ngày ${idx + 1}`, detail: l };
     });
+  };
+
+  const getDayImage = (item: ItineraryDayItem, idx: number, destination?: string | null) => {
+    if (item.image) return getImageUrl(item.image);
+    const dest = (destination || '').toLowerCase();
+    if (dest.includes('đà nẵng') || dest.includes('da nang')) {
+      const imgs = [
+        'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=800',
+        'https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=800',
+        'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800',
+        'https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=800',
+      ];
+      return imgs[idx % imgs.length];
+    }
+    if (dest.includes('sapa') || dest.includes('lào cai')) {
+      const imgs = [
+        'https://images.unsplash.com/photo-1528127269322-539801943592?w=800',
+        'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800',
+        'https://images.unsplash.com/photo-1570789210967-2cac24afeb00?w=800',
+      ];
+      return imgs[idx % imgs.length];
+    }
+    if (dest.includes('nhật') || dest.includes('tokyo') || dest.includes('japan')) {
+      const imgs = [
+        'https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=800',
+        'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800',
+        'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=800',
+        'https://images.unsplash.com/photo-1478436127897-769e00d0c715?w=800',
+        'https://images.unsplash.com/photo-1590559899731-a382839e5549?w=800',
+        'https://images.unsplash.com/photo-1536098561742-ca998e48cbcc?w=800',
+      ];
+      return imgs[idx % imgs.length];
+    }
+    if (dest.includes('hạ long') || dest.includes('quảng ninh')) {
+      const imgs = [
+        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
+        'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800',
+        'https://images.unsplash.com/photo-1528127269322-539801943592?w=800',
+      ];
+      return imgs[idx % imgs.length];
+    }
+    if (dest.includes('phú quốc')) {
+      const imgs = [
+        'https://images.unsplash.com/photo-1589394815804-964ed0be2eb5?w=800',
+        'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800',
+        'https://images.unsplash.com/photo-1512100356356-de1b84283e18?w=800',
+        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
+      ];
+      return imgs[idx % imgs.length];
+    }
+    return 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=800';
   };
 
   const itineraryDays = parseItineraryDays(tour?.LichTrinh || null);
@@ -255,7 +434,7 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
     if (!createdBooking?.MaDon) return;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`http://localhost:4000/api/bookings/ticket/${createdBooking.MaDon}`);
+        const res = await fetch(`${getApiUrl()}/bookings/ticket/${createdBooking.MaDon}`);
         if (res.ok) {
           const data = await res.json();
           if (data.TrangThaiDon === 'Da thanh toan') {
@@ -323,6 +502,12 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
                 <Star size={12} strokeWidth={1.5} fill="#B45309" color="#B45309" /> 5.0 (Xuất sắc)
               </span>
               <span className="code" style={{ fontSize: '12px', fontWeight: 600 }}>Mã tour: {tour.MaTour}</span>
+              {activePromo && (
+                <span style={{ background: '#FFFBEB', color: '#B45309', border: '1px solid #FDE68A', fontSize: '12px', fontWeight: 700, padding: '4px 10px', borderRadius: 'var(--radius-sm)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <span>Ưu đãi -{activePromo.PhanTramGiam}% • {activePromo.TenChuongTrinh}</span>
+                  <span style={{ color: '#92400E', fontWeight: 500, fontSize: '11.5px' }}>({formatPromoCountdown(activePromo.NgayKetThuc)})</span>
+                </span>
+              )}
             </div>
             <h1 style={{ fontSize: '30px', fontWeight: 900, color: '#0F172A', margin: 0 }}>
               {tour.TenTour}
@@ -340,7 +525,7 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
           }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={tour.HinhAnhURL || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200'}
+              src={getImageUrl(tour.HinhAnhURL) || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200'}
               alt={tour.TenTour}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
@@ -405,30 +590,128 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
               </div>
 
-              {/* 2. LỊCH TRÌNH THEO NGÀY (TIMELINE) */}
-              <div style={{ padding: '24px', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)' }}>
-                <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', marginBottom: '18px' }}>
-                  Lịch trình chi tiết từng ngày
-                </h2>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {itineraryDays.map((item, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: '16px' }}>
-                      <div style={{
-                        width: '32px', height: '32px', borderRadius: 'var(--radius-sm)', background: 'var(--zinc-900)',
-                        color: '#FFF', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: '13px', flexShrink: 0
-                      }}>
-                        {idx + 1}
+              {/* 2. LỊCH TRÌNH THEO NGÀY (TIMELINE WITH IMAGES) */}
+              <div style={{ padding: '28px', borderRadius: '18px', background: '#FFFFFF', border: '1px solid #E2E8F0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '22px', flexWrap: 'wrap', gap: '8px' }}>
+                  <div>
+                    <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '20px' }}>📸</span> Lịch trình chi tiết từng ngày & Hình ảnh thực tế
+                    </h2>
+                    <p style={{ fontSize: '12.5px', color: '#64748B', margin: '4px 0 0' }}>
+                      Hình ảnh chụp thực tế tại các thắng cảnh & điểm dừng chân tiêu chuẩn cao cấp
+                    </p>
+                  </div>
+                  <span style={{ fontSize: '12px', fontWeight: 700, background: '#EFF6FF', color: '#0284C7', padding: '6px 14px', borderRadius: '20px', border: '1px solid #BFDBFE' }}>
+                    {itineraryDays.length} ngày hành trình
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+                  {itineraryDays.map((item, idx) => {
+                    const imgUrl = getDayImage(item, idx, tour.DiemDen);
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '260px 1fr',
+                          gap: '20px',
+                          background: '#F8FAFC',
+                          borderRadius: '14px',
+                          border: '1px solid #E2E8F0',
+                          overflow: 'hidden',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                        }}
+                      >
+                        {/* Ảnh ngày */}
+                        <div
+                          style={{
+                            position: 'relative',
+                            height: '100%',
+                            minHeight: '190px',
+                            cursor: 'pointer',
+                            overflow: 'hidden',
+                            background: '#0F172A',
+                          }}
+                          onClick={() => setPreviewImage({ url: imgUrl, title: item.title })}
+                          title="Nhấn để phóng to ảnh chi tiết"
+                        >
+                          <img
+                            src={imgUrl}
+                            alt={item.title}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              transition: 'transform 0.4s ease',
+                              display: 'block',
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.06)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+                          />
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '12px',
+                              left: '12px',
+                              background: 'rgba(15, 23, 42, 0.88)',
+                              color: '#FFFFFF',
+                              padding: '4px 10px',
+                              borderRadius: '8px',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              letterSpacing: '0.5px',
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                            }}
+                          >
+                            NGÀY {item.day || idx + 1}
+                          </div>
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: '10px',
+                              right: '10px',
+                              background: 'rgba(0, 0, 0, 0.65)',
+                              color: '#FFF',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              backdropFilter: 'blur(4px)',
+                            }}
+                          >
+                            🔍 Phóng to ảnh
+                          </div>
+                        </div>
+
+                        {/* Nội dung ngày */}
+                        <div style={{ padding: '16px 20px 16px 4px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                          <div>
+                            <h3 style={{ fontSize: '15.5px', fontWeight: 800, color: '#0F172A', marginBottom: '8px', lineHeight: 1.4 }}>
+                              {item.title}
+                            </h3>
+                            <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.7, margin: 0 }}>
+                              {item.detail}
+                            </p>
+                          </div>
+
+                          {/* Highlights & Meals Tags */}
+                          <div style={{ marginTop: '14px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                            {item.highlights && item.highlights.map((h, i) => (
+                              <span key={i} style={{ background: '#E0F2FE', color: '#0369A1', fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '6px' }}>
+                                📍 {h}
+                              </span>
+                            ))}
+                            {item.meals && (
+                              <span style={{ background: '#FEF3C7', color: '#B45309', fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '6px' }}>
+                                🍽️ {item.meals}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ flex: 1, background: 'var(--zinc-50)', padding: '14px 18px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-                        <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--zinc-900)', marginBottom: '4px' }}>
-                          {item.title}
-                        </h4>
-                        <p style={{ fontSize: '13px', color: 'var(--zinc-600)', lineHeight: 1.6, margin: 0 }}>
-                          {item.detail}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -526,224 +809,546 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
             </div>
 
             {/* RIGHT COLUMN: STICKY BOOKING BOX */}
-            <div style={{ position: 'sticky', top: '90px' }}>
-              <div className="card" style={{ padding: '24px', borderRadius: '18px', background: '#FFFFFF', border: '1px solid #CBD5E1', boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
-                <span style={{ fontSize: '12px', color: '#64748B' }}>Giá trọn gói từ:</span>
-                <div style={{ fontSize: '26px', fontWeight: 900, color: '#005BAA', marginTop: '2px', marginBottom: '16px' }}>
-                  {vnd(tour.GiaNguoiLon)}
-                </div>
-
-                {/* CHỌN LỊCH */}
-                <div style={{ marginBottom: '14px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#0F172A', display: 'block', marginBottom: '4px' }}>
-                    Chọn Ngày Khởi Hành:
-                  </label>
-                  <select
-                    className="select"
-                    style={{ width: '100%', fontSize: '13px' }}
-                    value={activeLichId || ''}
-                    onChange={(e) => setSelectedLichId(Number(e.target.value))}
-                  >
-                    {tour.LichKhoiHanh && tour.LichKhoiHanh.length > 0 ? (
-                      tour.LichKhoiHanh.map((l) => (
-                        <option key={l.LichID} value={l.LichID}>
-                          {l.MaLich} — {new Date(l.NgayKhoiHanh).toLocaleDateString('vi-VN')} (Còn {l.SoChoToiDa - l.SoChoDaDat} chỗ)
-                        </option>
-                      ))
-                    ) : (
-                      <option value={tour.TourID}>LICH-OCT15 — 15/10/2026 (Còn 25 chỗ)</option>
+            <div style={{ position: 'sticky', top: '88px' }}>
+              <div style={{ padding: '24px', borderRadius: '14px', background: '#FFFFFF', border: '1px solid #E2E8F0', boxShadow: '0 4px 20px rgba(15, 23, 42, 0.05)' }}>
+                {/* 1. HEADER GIÁ TOUR */}
+                <div style={{ paddingBottom: '16px', marginBottom: '16px', borderBottom: '1px solid #F1F5F9' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '12.5px', color: '#64748B', fontWeight: 500 }}>
+                      {activePromo ? 'Giá ưu đãi trọn gói / khách:' : 'Giá trọn gói từ / khách:'}
+                    </span>
+                    {activePromo && (
+                      <span style={{ background: '#FEF2F2', color: '#BE123C', border: '1px solid #FECDD3', fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '4px' }}>
+                        Tiết kiệm {activePromo.PhanTramGiam}%
+                      </span>
                     )}
-                  </select>
-                </div>
-
-                {/* SỐ KHÁCH: BỐ CỤC CHUẨN LỮ HÀNH CAO CẤP */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px' }}>
-                  {/* NGƯỜI LỚN */}
-                  <div style={{ background: '#F8FAFC', padding: '10px 14px', borderRadius: '10px', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>Người lớn</div>
-                      <div style={{ fontSize: '11.5px', color: '#0284C7', fontWeight: 700 }}>{vnd(tour.GiaNguoiLon)}/khách</div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const val = Math.max(1, adults - 1);
-                          setAdults(val);
-                          syncPassengersCount(val, children);
-                        }}
-                        style={{ width: '30px', height: '30px', borderRadius: '6px', border: '1px solid #CBD5E1', background: '#FFF', fontWeight: 800, cursor: 'pointer' }}
-                      >
-                        -
-                      </button>
-                      <input
-                        className="input"
-                        type="number"
-                        min={1}
-                        value={adults}
-                        onChange={(e) => {
-                          const val = Math.max(1, Number(e.target.value));
-                          setAdults(val);
-                          syncPassengersCount(val, children);
-                        }}
-                        style={{ width: '45px', textAlign: 'center', fontWeight: 800, padding: '4px' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const val = adults + 1;
-                          setAdults(val);
-                          syncPassengersCount(val, children);
-                        }}
-                        style={{ width: '30px', height: '30px', borderRadius: '6px', border: '1px solid #CBD5E1', background: '#FFF', fontWeight: 800, cursor: 'pointer' }}
-                      >
-                        +
-                      </button>
-                    </div>
                   </div>
-
-                  {/* TRẺ EM */}
-                  <div style={{ background: '#F8FAFC', padding: '10px 14px', borderRadius: '10px', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  {activePromo ? (
                     <div>
-                      <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
-                        Trẻ em <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 500 }}>(2 - 11 tuổi)</span>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+                        <span style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.5px' }}>
+                          {vnd(activePromo.GiaNguoiLonKM)}
+                        </span>
+                        <span style={{ fontSize: '14px', color: '#94A3B8', textDecoration: 'line-through', fontWeight: 500 }}>
+                          {vnd(tour.GiaNguoiLon)}
+                        </span>
                       </div>
-                      <div style={{ fontSize: '11.5px', color: '#0284C7', fontWeight: 700 }}>{vnd(tour.GiaTreEm)}/khách</div>
+                      <div style={{ fontSize: '11.5px', color: '#B45309', marginTop: '4px', fontWeight: 500 }}>
+                        {activePromo.TenChuongTrinh} • {formatPromoCountdown(activePromo.NgayKetThuc)}
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const val = Math.max(0, children - 1);
-                          setChildren(val);
-                          syncPassengersCount(adults, val);
-                        }}
-                        style={{ width: '30px', height: '30px', borderRadius: '6px', border: '1px solid #CBD5E1', background: '#FFF', fontWeight: 800, cursor: 'pointer' }}
-                      >
-                        -
-                      </button>
+                  ) : (
+                    <div style={{ fontSize: '26px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.5px' }}>
+                      {vnd(tour.GiaNguoiLon)}
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. CHỌN LỊCH KHỞI HÀNH */}
+                <div style={{ marginBottom: '18px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                      Đợt khởi hành
+                    </label>
+                    <label style={{ fontSize: '12px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', userSelect: 'none' }}>
                       <input
-                        className="input"
-                        type="number"
-                        min={0}
-                        value={children}
-                        onChange={(e) => {
-                          const val = Math.max(0, Number(e.target.value));
-                          setChildren(val);
-                          syncPassengersCount(adults, val);
-                        }}
-                        style={{ width: '45px', textAlign: 'center', fontWeight: 800, padding: '4px' }}
+                        type="checkbox"
+                        checked={hideExpired}
+                        onChange={(e) => setHideExpired(e.target.checked)}
+                        style={{ cursor: 'pointer', accentColor: '#0F172A' }}
                       />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const val = children + 1;
-                          setChildren(val);
-                          syncPassengersCount(adults, val);
-                        }}
-                        style={{ width: '30px', height: '30px', borderRadius: '6px', border: '1px solid #CBD5E1', background: '#FFF', fontWeight: 800, cursor: 'pointer' }}
-                      >
-                        +
-                      </button>
-                    </div>
+                      <span>Ẩn lịch đã qua</span>
+                    </label>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '230px', overflowY: 'auto', paddingRight: '2px' }}>
+                    {validDepartures.length > 0 ? (
+                      validDepartures.map((l) => {
+                        const isSelected = l.LichID === activeLichId;
+                        const expired = isDepartureExpired(l);
+                        const remaining = Math.max(0, l.SoChoToiDa - l.SoChoDaDat);
+                        const isFull = remaining === 0;
+
+                        return (
+                          <div
+                            key={l.LichID}
+                            onClick={() => !expired && setSelectedLichId(l.LichID)}
+                            style={{
+                              padding: '11px 13px',
+                              borderRadius: '10px',
+                              border: isSelected ? '1.5px solid #0F172A' : '1px solid #E2E8F0',
+                              background: isSelected ? '#F8FAFC' : expired ? '#F8FAFC' : '#FFFFFF',
+                              cursor: expired ? 'not-allowed' : 'pointer',
+                              opacity: expired ? 0.55 : 1,
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontWeight: 700, fontSize: '13.5px', color: '#0F172A' }}>
+                                  {new Date(l.NgayKhoiHanh).toLocaleDateString('vi-VN')}
+                                </span>
+                                <span style={{ fontSize: '11.5px', color: '#64748B', fontFamily: 'monospace' }}>
+                                  {l.MaLich}
+                                </span>
+                              </div>
+                              <div>
+                                {expired ? (
+                                  <span style={{ background: '#F1F5F9', color: '#64748B', fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px' }}>
+                                    Đã đóng
+                                  </span>
+                                ) : isFull ? (
+                                  <span style={{ background: '#FEF2F2', color: '#991B1B', fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px' }}>
+                                    Hết chỗ
+                                  </span>
+                                ) : remaining <= 5 ? (
+                                  <span style={{ background: '#FFFBEB', color: '#92400E', fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px' }}>
+                                    Còn {remaining} chỗ
+                                  </span>
+                                ) : (
+                                  <span style={{ background: '#ECFDF5', color: '#065F46', fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px' }}>
+                                    Còn {remaining} chỗ
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748B', marginBottom: '6px' }}>
+                              <span>Đã đăng ký: <strong style={{ color: '#334155', fontWeight: 600 }}>{l.SoChoDaDat} khách</strong></span>
+                              <span>Quy mô đoàn: <strong style={{ color: '#334155', fontWeight: 600 }}>{l.SoChoToiDa} chỗ</strong></span>
+                            </div>
+
+                            <div style={{ height: '4px', width: '100%', background: '#E2E8F0', borderRadius: '2px', overflow: 'hidden' }}>
+                              <div
+                                style={{
+                                  height: '100%',
+                                  width: `${Math.min(100, Math.round((l.SoChoDaDat / l.SoChoToiDa) * 100))}%`,
+                                  background: expired ? '#94A3B8' : isFull ? '#DC2626' : remaining <= 5 ? '#D97706' : '#0F172A',
+                                  borderRadius: '2px',
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div style={{ padding: '12px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', color: '#475569', fontSize: '12.5px', textAlign: 'center' }}>
+                        Hiện chưa có đợt khởi hành mới. Quý khách vui lòng bỏ chọn &quot;Ẩn lịch đã qua&quot; hoặc liên hệ tổng đài 1900 1234.
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* FORM HÀNH KHÁCH & CCCD 12 SỐ */}
-                <div style={{ marginBottom: '14px', background: '#F8FAFC', padding: '12px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#0284C7', display: 'block', marginBottom: '8px' }}>
-                    Danh sách Hành Khách & CCCD (12 số):
-                  </label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '200px', overflowY: 'auto' }}>
-                    {passengers.map((p, idx) => (
-                      <div key={idx} style={{ background: '#FFFFFF', padding: '8px 10px', borderRadius: '8px', border: '1px solid #CBD5E1' }}>
-                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', marginBottom: '4px' }}>
-                          Khách {idx + 1} ({idx < adults ? 'Người lớn' : 'Trẻ em'})
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <input
-                            className="input"
-                            placeholder="Họ và tên..."
-                            value={p.hoTen}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setPassengers((prev) => {
-                                const next = [...prev];
-                                next[idx].hoTen = val;
-                                return next;
-                              });
-                            }}
-                            style={{ fontSize: '12px', padding: '6px 8px' }}
-                          />
-                          <input
-                            className="input"
-                            placeholder="Số CCCD / Mã định danh (12 số)"
-                            maxLength={12}
-                            value={p.cccd}
-                            onChange={(e) => {
-                              const val = e.target.value.replace(/\D/g, '');
-                              setPassengers((prev) => {
-                                const next = [...prev];
-                                next[idx].cccd = val;
-                                return next;
-                              });
-                            }}
-                            style={{ fontSize: '12px', padding: '6px 8px' }}
-                          />
+                {/* 3. THÔNG TIN SỐ CHỖ CỦA ĐỢT ĐANG CHỌN */}
+                {activeSchedule && (
+                  <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '10px', border: '1px solid #E2E8F0', marginBottom: '18px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', textAlign: 'center' }}>
+                      <div style={{ background: '#FFFFFF', padding: '8px 6px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '2px' }}>Tổng số chỗ</div>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>{activeSchedule.SoChoToiDa}</div>
+                      </div>
+                      <div style={{ background: '#FFFFFF', padding: '8px 6px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '2px' }}>Đã đăng ký</div>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>{activeSchedule.SoChoDaDat}</div>
+                      </div>
+                      <div style={{ background: '#FFFFFF', padding: '8px 6px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '2px' }}>Còn nhận</div>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: remainingSeats > 0 ? '#047857' : '#B91C1C' }}>
+                          {remainingSeats} chỗ
                         </div>
                       </div>
-                    ))}
+                    </div>
+
+                    {(isScheduleExpired || isSoldOut || isExceededSeats) && (
+                      <div style={{ marginTop: '8px', padding: '8px 10px', borderRadius: '6px', background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B', fontSize: '12px', fontWeight: 500 }}>
+                        {isScheduleExpired
+                          ? 'Đợt khởi hành này đã đóng đăng ký. Vui lòng chọn ngày khác.'
+                          : isSoldOut
+                          ? `Đợt khởi hành này đã đủ ${activeSchedule.SoChoToiDa}/${activeSchedule.SoChoToiDa} khách. Vui lòng chọn đợt khác.`
+                          : `Số lượng đang chọn (${totalGuestsSelected} khách) vượt quá số chỗ còn trống (${remainingSeats} chỗ).`}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 4. SỐ LƯỢNG HÀNH KHÁCH (THIẾT KẾ STEPPER CHUẨN LỮ HÀNH) */}
+                <div style={{ marginBottom: '18px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                      Số lượng hành khách
+                    </label>
+                    <span style={{ fontSize: '12px', color: '#64748B' }}>
+                      Đã chọn: <strong style={{ color: '#0F172A' }}>{totalGuestsSelected} khách</strong>
+                    </span>
+                  </div>
+
+                  <div style={{ border: '1px solid #E2E8F0', borderRadius: '10px', overflow: 'hidden', background: '#FFFFFF' }}>
+                    {/* NGƯỜI LỚN */}
+                    <div style={{ padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #F1F5F9' }}>
+                      <div>
+                        <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#0F172A' }}>
+                          Người lớn <span style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 400 }}>(Từ 12 tuổi)</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                          <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>
+                            {vnd(giaNL)}/khách
+                          </span>
+                          {activePromo && (
+                            <span style={{ fontSize: '11.5px', color: '#94A3B8', textDecoration: 'line-through' }}>
+                              {vnd(tour.GiaNguoiLon)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #CBD5E1', borderRadius: '8px', background: '#F8FAFC', padding: '2px' }}>
+                        <button
+                          type="button"
+                          disabled={adults <= 1}
+                          onClick={() => {
+                            const val = Math.max(1, adults - 1);
+                            setAdults(val);
+                            syncPassengersCount(val, children);
+                          }}
+                          style={{
+                            width: '30px',
+                            height: '30px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: adults <= 1 ? 'transparent' : '#FFFFFF',
+                            color: adults <= 1 ? '#94A3B8' : '#0F172A',
+                            fontWeight: 700,
+                            fontSize: '15px',
+                            cursor: adults <= 1 ? 'not-allowed' : 'pointer',
+                            boxShadow: adults <= 1 ? 'none' : '0 1px 2px rgba(0,0,0,0.05)',
+                          }}
+                        >
+                          −
+                        </button>
+                        <span style={{ minWidth: '36px', textAlign: 'center', fontSize: '13.5px', fontWeight: 700, color: '#0F172A', userSelect: 'none' }}>
+                          {adults}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={remainingSeats > 0 && totalGuestsSelected >= remainingSeats}
+                          onClick={() => {
+                            if (remainingSeats > 0 && totalGuestsSelected >= remainingSeats) return;
+                            const val = adults + 1;
+                            setAdults(val);
+                            syncPassengersCount(val, children);
+                          }}
+                          style={{
+                            width: '30px',
+                            height: '30px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: remainingSeats > 0 && totalGuestsSelected >= remainingSeats ? 'transparent' : '#FFFFFF',
+                            color: remainingSeats > 0 && totalGuestsSelected >= remainingSeats ? '#94A3B8' : '#0F172A',
+                            fontWeight: 700,
+                            fontSize: '15px',
+                            cursor: remainingSeats > 0 && totalGuestsSelected >= remainingSeats ? 'not-allowed' : 'pointer',
+                            boxShadow: remainingSeats > 0 && totalGuestsSelected >= remainingSeats ? 'none' : '0 1px 2px rgba(0,0,0,0.05)',
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* TRẺ EM */}
+                    <div style={{ padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#0F172A' }}>
+                          Trẻ em <span style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 400 }}>(2 – 11 tuổi)</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                          <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>
+                            {vnd(giaTE)}/khách
+                          </span>
+                          {activePromo && (
+                            <span style={{ fontSize: '11.5px', color: '#94A3B8', textDecoration: 'line-through' }}>
+                              {vnd(tour.GiaTreEm)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #CBD5E1', borderRadius: '8px', background: '#F8FAFC', padding: '2px' }}>
+                        <button
+                          type="button"
+                          disabled={children <= 0}
+                          onClick={() => {
+                            const val = Math.max(0, children - 1);
+                            setChildren(val);
+                            syncPassengersCount(adults, val);
+                          }}
+                          style={{
+                            width: '30px',
+                            height: '30px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: children <= 0 ? 'transparent' : '#FFFFFF',
+                            color: children <= 0 ? '#94A3B8' : '#0F172A',
+                            fontWeight: 700,
+                            fontSize: '15px',
+                            cursor: children <= 0 ? 'not-allowed' : 'pointer',
+                            boxShadow: children <= 0 ? 'none' : '0 1px 2px rgba(0,0,0,0.05)',
+                          }}
+                        >
+                          −
+                        </button>
+                        <span style={{ minWidth: '36px', textAlign: 'center', fontSize: '13.5px', fontWeight: 700, color: '#0F172A', userSelect: 'none' }}>
+                          {children}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={remainingSeats > 0 && totalGuestsSelected >= remainingSeats}
+                          onClick={() => {
+                            if (remainingSeats > 0 && totalGuestsSelected >= remainingSeats) return;
+                            const val = children + 1;
+                            setChildren(val);
+                            syncPassengersCount(adults, val);
+                          }}
+                          style={{
+                            width: '30px',
+                            height: '30px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: remainingSeats > 0 && totalGuestsSelected >= remainingSeats ? 'transparent' : '#FFFFFF',
+                            color: remainingSeats > 0 && totalGuestsSelected >= remainingSeats ? '#94A3B8' : '#0F172A',
+                            fontWeight: 700,
+                            fontSize: '15px',
+                            cursor: remainingSeats > 0 && totalGuestsSelected >= remainingSeats ? 'not-allowed' : 'pointer',
+                            boxShadow: remainingSeats > 0 && totalGuestsSelected >= remainingSeats ? 'none' : '0 1px 2px rgba(0,0,0,0.05)',
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* VOUCHER INPUT */}
-                <div style={{ marginBottom: '14px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: '4px' }}>
-                    Mã giảm giá (VIETTOUR2026, BAYHE2026...):
+                {/* 5. THÔNG TIN HÀNH KHÁCH & CCCD 12 SỐ */}
+                <div style={{ marginBottom: '18px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+                      Thông tin hành khách ({passengers.length})
+                    </label>
+                    <span style={{ fontSize: '11.5px', color: '#64748B' }}>
+                      Bắt buộc đủ Họ tên &amp; CCCD
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '230px', overflowY: 'auto', paddingRight: '2px' }}>
+                    {passengers.map((p, idx) => {
+                      const isAdult = idx < adults;
+                      const hasName = p.hoTen.trim().length >= 2;
+                      const hasCccd = p.cccd.trim().length === 12;
+                      const isValid = hasName && hasCccd;
+
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            background: '#F8FAFC',
+                            padding: '10px 12px',
+                            borderRadius: '8px',
+                            border: `1px solid ${isValid ? '#E2E8F0' : '#CBD5E1'}`,
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#334155' }}>
+                              Hành khách {idx + 1} • {isAdult ? 'Người lớn' : 'Trẻ em'}
+                            </span>
+                            {isValid ? (
+                              <span style={{ fontSize: '11px', color: '#047857', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                <Check size={12} /> Đã nhập đủ
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: '11px', color: '#B45309', fontWeight: 500 }}>
+                                Cần điền đủ
+                              </span>
+                            )}
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input
+                              className="input"
+                              placeholder={`Họ và tên hành khách ${idx + 1}`}
+                              value={p.hoTen}
+                              required
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setPassengers((prev) => {
+                                  const next = [...prev];
+                                  next[idx].hoTen = val;
+                                  return next;
+                                });
+                              }}
+                              style={{
+                                fontSize: '12.5px',
+                                padding: '7px 10px',
+                                width: '100%',
+                                background: '#FFFFFF',
+                              }}
+                            />
+
+                            <div>
+                              <input
+                                className="input"
+                                placeholder="Số CCCD / Mã định danh (đủ 12 chữ số)"
+                                maxLength={12}
+                                value={p.cccd}
+                                required
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/\D/g, '');
+                                  setPassengers((prev) => {
+                                    const next = [...prev];
+                                    next[idx].cccd = val;
+                                    return next;
+                                  });
+                                }}
+                                style={{
+                                  fontSize: '12.5px',
+                                  padding: '7px 10px',
+                                  width: '100%',
+                                  background: '#FFFFFF',
+                                }}
+                              />
+                              {p.cccd.trim().length > 0 && p.cccd.trim().length < 12 && (
+                                <div style={{ fontSize: '11px', color: '#B45309', marginTop: '3px' }}>
+                                  Đã nhập {p.cccd.trim().length}/12 chữ số
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 6. MÃ GIẢM GIÁ (VOUCHER) */}
+                <div style={{ marginBottom: '18px' }}>
+                  <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: '6px' }}>
+                    Mã ưu đãi (Voucher)
                   </label>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <input
                       className="input"
-                      placeholder="MÃ GIẢM GIÁ"
+                      placeholder="Nhập mã ưu đãi..."
                       value={voucherCode}
-                      onChange={(e) => setVoucherCode(e.target.value)}
-                      style={{ flex: 1, textTransform: 'uppercase', fontSize: '12.5px', fontWeight: 800 }}
+                      onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                      style={{ flex: 1, textTransform: 'uppercase', fontSize: '12.5px', fontWeight: 700, fontFamily: 'monospace' }}
                     />
-                    <button className="btn btn-outline btn-sm" onClick={handleApplyVoucher} disabled={validatingVoucher} style={{ fontWeight: 800 }}>
-                      Áp dụng
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={handleApplyVoucher}
+                      disabled={validatingVoucher}
+                      style={{ fontWeight: 600, padding: '0 14px' }}
+                    >
+                      {validatingVoucher ? '...' : 'Áp dụng'}
                     </button>
                   </div>
+
+                  {validVouchersForTour.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                      {validVouchersForTour.map((v) => {
+                        const isEligible = rawTotal >= Number(v.GiaTriDonToiThieu);
+                        return (
+                          <button
+                            key={v.VoucherID}
+                            type="button"
+                            onClick={() => {
+                              setVoucherCode(v.MaVoucher);
+                              setVoucherError(null);
+                            }}
+                            title={`${v.TenChuongTrinh} — Đơn tối thiểu ${vnd(v.GiaTriDonToiThieu)}`}
+                            style={{
+                              fontSize: '11px',
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              border: voucherCode === v.MaVoucher ? '1px solid #0F172A' : '1px solid #E2E8F0',
+                              background: voucherCode === v.MaVoucher ? '#F1F5F9' : '#FFFFFF',
+                              color: isEligible ? '#0F172A' : '#94A3B8',
+                              cursor: 'pointer',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {v.MaVoucher} (-{Number(v.PhanTramGiam)}%)
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {voucherApplied && (
-                    <div style={{ fontSize: '12px', color: 'var(--emerald-600)', fontWeight: 600, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Check size={12} strokeWidth={2} /> {voucherApplied}
+                    <div style={{ fontSize: '12px', color: '#047857', fontWeight: 600, marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Check size={13} strokeWidth={2} /> <span>{voucherApplied}</span>
                     </div>
                   )}
                   {voucherError && (
-                    <div style={{ fontSize: '12px', color: 'var(--rose-600)', fontWeight: 600, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <X size={12} strokeWidth={2} /> {voucherError}
+                    <div style={{ fontSize: '12px', color: '#B91C1C', fontWeight: 500, marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <X size={13} strokeWidth={2} /> <span>{voucherError}</span>
                     </div>
                   )}
                 </div>
 
-                {/* TỔNG TIỀN */}
-                <div style={{ background: 'var(--zinc-50)', padding: '14px', borderRadius: 'var(--radius-md)', marginBottom: '16px', border: '1px solid var(--border)' }}>
+                {/* 7. TỔNG CỘNG & NÚT ĐẶT TOUR */}
+                <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', marginBottom: '14px', border: '1px solid #E2E8F0' }}>
+                  {voucherDiscount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748B', marginBottom: '6px' }}>
+                      <span>Tạm tính ({totalGuestsSelected} khách):</span>
+                      <span>{vnd(rawTotal)} (Giảm -{vnd(voucherDiscount)})</span>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--zinc-600)' }}>TỔNG CỘNG:</span>
-                    <strong style={{ fontSize: '20px', fontWeight: 800, color: 'var(--zinc-900)' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Tổng thanh toán:</span>
+                    <strong style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A' }}>
                       {vnd(finalTotal)}
                     </strong>
                   </div>
                 </div>
 
-                {/* NÚT ĐẶT NGAY */}
-                <button
-                  className="btn btn-primary"
-                  onClick={handleBooking}
-                  disabled={bookingLoading}
-                  style={{ width: '100%', padding: '12px', background: 'var(--zinc-900)', borderColor: 'var(--zinc-900)', fontWeight: 700, fontSize: '14px' }}
-                >
-                  {bookingLoading ? 'Đang gửi...' : 'Đặt tour & Nhận vé điện tử'}
-                </button>
+                {(() => {
+                  const isPassengersIncomplete = passengers.some((p) => p.hoTen.trim().length < 2 || p.cccd.trim().length !== 12);
+                  const missingCount = passengers.filter((p) => p.hoTen.trim().length < 2 || p.cccd.trim().length !== 12).length;
+                  const isButtonDisabled = bookingLoading || !canBook || isPassengersIncomplete;
+
+                  return (
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleBooking}
+                      disabled={isButtonDisabled}
+                      style={{
+                        width: '100%',
+                        padding: '13px',
+                        background: isButtonDisabled ? '#E2E8F0' : '#0F172A',
+                        borderColor: isButtonDisabled ? '#E2E8F0' : '#0F172A',
+                        color: isButtonDisabled ? '#64748B' : '#FFFFFF',
+                        fontWeight: 700,
+                        fontSize: '13.5px',
+                        borderRadius: '8px',
+                        cursor: isButtonDisabled ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {bookingLoading
+                        ? 'Đang khởi tạo đơn...'
+                        : isScheduleExpired
+                        ? 'Đợt khởi hành đã đóng'
+                        : isSoldOut
+                        ? 'Đợt khởi hành đã hết chỗ'
+                        : isExceededSeats
+                        ? `Vượt quá số ghế trống (Còn ${remainingSeats} chỗ)`
+                        : isPassengersIncomplete
+                        ? `Vui lòng điền đủ Họ tên & CCCD (${missingCount} khách)`
+                        : 'Đặt tour & Nhận vé điện tử'}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -779,172 +1384,213 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
               <div style={{ fontSize: '22px', fontWeight: 900, color: '#005BAA' }}>{vnd(createdBooking.TongTien)}</div>
             </div>
 
-            {/* TAB CHUYỂN ĐỔI: VNPAY vs ZALOPAY vs TIỀN MẶT/THẺ */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '14px', background: '#F1F5F9', padding: '4px', borderRadius: '10px' }}>
+            {/* TAB CHUYỂN ĐỔI: VNPAY vs TIỀN MẶT TẠI QUẦY */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '14px', background: '#F1F5F9', padding: '4px', borderRadius: '10px' }}>
               <button
                 onClick={() => setPayMethod('VNPAY')}
                 style={{
-                  padding: '9px 6px', border: 'none', borderRadius: '6px',
-                  background: payMethod === 'VNPAY' ? '#0284C7' : 'transparent',
+                  padding: '9px 8px', border: 'none', borderRadius: '6px',
+                  background: payMethod === 'VNPAY' ? '#0F172A' : 'transparent',
                   color: payMethod === 'VNPAY' ? '#FFF' : '#475569',
-                  fontWeight: 700, fontSize: '12px', cursor: 'pointer',
+                  fontWeight: 700, fontSize: '12.5px', cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}
               >
-                VNPay Sandbox
-              </button>
-              <button
-                onClick={() => setPayMethod('ZALOPAY')}
-                style={{
-                  padding: '9px 6px', border: 'none', borderRadius: '6px',
-                  background: payMethod === 'ZALOPAY' ? '#0068FF' : 'transparent',
-                  color: payMethod === 'ZALOPAY' ? '#FFF' : '#475569',
-                  fontWeight: 700, fontSize: '12px', cursor: 'pointer',
-                  transition: 'all 0.15s',
-                }}
-              >
-                Ví ZaloPay
+                Cổng VNPAY (QR / ATM / Thẻ)
               </button>
               <button
                 onClick={() => setPayMethod('CASH_CARD')}
                 style={{
-                  padding: '9px 6px', border: 'none', borderRadius: '6px',
-                  background: payMethod === 'CASH_CARD' ? '#0284C7' : 'transparent',
+                  padding: '9px 8px', border: 'none', borderRadius: '6px',
+                  background: payMethod === 'CASH_CARD' ? '#0F172A' : 'transparent',
                   color: payMethod === 'CASH_CARD' ? '#FFF' : '#475569',
-                  fontWeight: 700, fontSize: '12px', cursor: 'pointer',
+                  fontWeight: 700, fontSize: '12.5px', cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}
               >
-                Tại quầy
+                Thanh toán tại quầy
               </button>
             </div>
 
-            {/* TAB 1: CỔNG VNPAY TRỰC TUYẾN (SANDBOX) */}
+            {/* TAB 1: CỔNG VNPAY TRỰC TUYẾN */}
             {payMethod === 'VNPAY' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  padding: '12px 14px',
+                  background: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '10px',
+                  fontSize: '12.5px',
+                  color: '#475569',
+                  lineHeight: 1.5,
+                }}>
+                  <ShieldCheck size={20} color="#0F172A" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '2px' }}>
+                      Cổng thanh toán trực tuyến VNPAY
+                    </div>
+                    <div>
+                      Hỗ trợ ứng dụng Ngân hàng quét VNPAY-QR, Thẻ ATM nội địa (Napas) và Thẻ quốc tế (Visa, Master, JCB). Vé điện tử &amp; Mã QR lên đoàn sẽ được kích hoạt ngay sau khi thanh toán thành công.
+                    </div>
+                  </div>
+                </div>
+
                 <button
                   onClick={() => handlePayVNPay(createdBooking.DonHangID, createdBooking.TongTien, createdBooking.MaDon)}
                   disabled={loadingVnpay}
                   className="btn btn-primary"
                   style={{
-                    width: '100%', padding: '13px', background: '#0284C7', borderColor: '#0284C7',
-                    fontWeight: 700, fontSize: '14.5px', borderRadius: '8px', cursor: 'pointer',
+                    width: '100%', padding: '13px', background: '#0F172A', borderColor: '#0F172A',
+                    fontWeight: 700, fontSize: '14px', borderRadius: '8px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                   }}
                 >
-                  {loadingVnpay ? 'Đang kết nối cổng VNPay...' : 'Thanh toán ngay qua Cổng VNPay Sandbox →'}
-                </button>
-
-                <div style={{
-                  background: '#FEF3C7',
-                  border: '1px solid #FCD34D',
-                  borderRadius: '10px',
-                  padding: '12px 14px',
-                  fontSize: '12px',
-                  color: '#78350F',
-                  lineHeight: 1.5,
-                }}>
-                  <div style={{ fontWeight: 800, marginBottom: '4px' }}>Lưu ý kiểm thử cổng VNPay Sandbox:</div>
-                  <div style={{ marginBottom: '6px' }}>
-                    • Không quét mã QR bằng App Ngân Hàng thật bên ngoài (sẽ báo <em>"Nhà cung cấp không khả dụng"</em> do đây là môi trường thử nghiệm).
-                  </div>
-                  <div>
-                    • Trên giao diện VNPay, chọn mục <strong>"Thẻ nội địa & tài khoản ngân hàng"</strong> → Chọn <strong>NCB</strong> → Nhập thẻ thử nghiệm:
-                    <div style={{ background: '#FFFBEB', padding: '6px 8px', borderRadius: '6px', marginTop: '4px', border: '1px solid #FDE68A' }}>
-                      Số thẻ: <strong>9704198526191432198</strong><br />
-                      Tên chủ thẻ: <strong>NGUYEN VAN A</strong> | Ngày PH: <strong>07/15</strong><br />
-                      Mã OTP: <strong>123456</strong>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: CỔNG ZALOPAY SANDBOX */}
-            {payMethod === 'ZALOPAY' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{
-                  background: '#EFF6FF',
-                  border: '1px solid #BFDBFE',
-                  borderRadius: '10px',
-                  padding: '12px 14px',
-                  fontSize: '12.5px',
-                  color: '#1E40AF',
-                  lineHeight: 1.5,
-                }}>
-                  <div style={{ fontWeight: 800, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ background: '#0068FF', color: '#FFF', borderRadius: '4px', padding: '1px 6px', fontSize: '11px', fontWeight: 900 }}>ZaloPay</span>
-                    Cổng Ví Điện Tử ZaloPay Sandbox
-                  </div>
-                  <div>Thanh toán tức thì bằng App ZaloPay / Ví điện tử hoặc chuyển khoản Napas 24/7. Tự động xác thực giao dịch sau khi hoàn tất.</div>
-                </div>
-
-                <button
-                  onClick={() => handlePayZaloPay(createdBooking.DonHangID, createdBooking.TongTien, createdBooking.MaDon)}
-                  disabled={loadingZalopay}
-                  className="btn btn-primary"
-                  style={{
-                    width: '100%',
-                    padding: '13px',
-                    background: '#0068FF',
-                    borderColor: '#0068FF',
-                    fontWeight: 700,
-                    fontSize: '14px',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {loadingZalopay ? 'Đang kết nối cổng ZaloPay...' : 'Thanh toán ngay qua Ví ZaloPay Sandbox →'}
+                  <Lock size={15} />
+                  {loadingVnpay ? 'Đang kết nối cổng VNPay...' : 'Thanh toán qua VNPAY →'}
                 </button>
               </div>
             )}
 
-            {/* TAB 3: TIỀN MẶT / THẺ TẠI QUẦY (GIỮ CHỖ) */}
+            {/* TAB 2: TIỀN MẶT / THẺ TẠI QUẦY (GIỮ CHỖ) */}
             {payMethod === 'CASH_CARD' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div style={{
-                  background: '#F0FDF4',
-                  border: '1px solid #BBF7D0',
-                  borderRadius: '12px',
-                  padding: '16px',
-                  fontSize: '13px',
-                  color: '#166534',
+                  background: '#F8FAFC',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '10px',
+                  padding: '14px 16px',
+                  fontSize: '12.5px',
+                  color: '#334155',
                 }}>
-                  <div style={{ fontWeight: 800, fontSize: '14px', marginBottom: '6px', color: '#15803D' }}>
-                    Đã giữ chỗ thành công (Thời hạn 24 giờ)
+                  <div style={{ fontWeight: 700, fontSize: '13.5px', marginBottom: '6px', color: '#0F172A' }}>
+                    Xác nhận giữ chỗ tạm thời (Hiệu lực 24 giờ)
                   </div>
-                  <p style={{ margin: '0 0 10px', lineHeight: 1.5 }}>
-                    Chuyến đi của Quý khách đã được bảo lưu trên hệ thống. Quý khách vui lòng hoàn tất thanh toán trước khi thời hạn giữ chỗ kết thúc.
+                  <p style={{ margin: '0 0 10px', lineHeight: 1.55, color: '#475569' }}>
+                    Đơn đặt chỗ của Quý khách đang ở trạng thái <strong>Chờ thanh toán</strong> (chưa phát hành vé điện tử). Quý khách vui lòng đọc mã đơn <strong>{createdBooking.MaDon}</strong> và thanh toán tại quầy giao dịch trong vòng 24 giờ để nhận vé lên đoàn:
                   </p>
-                  <div style={{ background: '#FFFFFF', padding: '10px 12px', borderRadius: '8px', border: '1px solid #DCFCE7', fontSize: '12.5px', color: '#1E293B', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div>Văn phòng VietTour: <strong>Số 40, Đường số 13, KĐT Vạn Phúc, TP. Hồ Chí Minh</strong></div>
-                    <div>Hình thức hỗ trợ: <strong>Tiền mặt hoặc Quẹt thẻ POS (ATM / Visa / Mastercard)</strong></div>
-                    <div>Hotline hỗ trợ 24/7: <strong style={{ color: '#0284C7' }}>1900 1234</strong></div>
+                  <div style={{ background: '#FFFFFF', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12.5px', color: '#1E293B', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                    <div>• Quầy giao dịch Sân bay: <strong>Quầy VietTour — Sảnh Đi Ga Quốc Nội, Sân bay Quốc tế Tân Sơn Nhất (45 Trường Sơn, Q. Tân Bình, TP.HCM)</strong></div>
+                    <div>• Đại lý Phòng vé Trung tâm: <strong>190 Pasteur, Phường Võ Thị Sáu, Quận 3, TP.HCM</strong></div>
+                    <div>• Phương thức chấp nhận: <strong>Tiền mặt (VNĐ) hoặc Quẹt thẻ POS (Napas / Visa / Mastercard)</strong></div>
+                    <div>• Tổng đài hỗ trợ: <strong style={{ color: '#0F172A' }}>1900 1234 (07:00 – 22:00)</strong></div>
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <Link
-                    href="/portal/my-bookings"
-                    className="btn btn-outline"
-                    style={{ flex: 1, textAlign: 'center', textDecoration: 'none', fontWeight: 700, fontSize: '13px', padding: '10px' }}
-                  >
-                    Xem đơn của tôi
-                  </Link>
                   <button
+                    type="button"
                     onClick={() => setCreatedBooking(null)}
-                    className="btn btn-primary"
-                    style={{ flex: 1, background: '#0F172A', borderColor: '#0F172A', fontWeight: 700, fontSize: '13px', padding: '10px' }}
+                    className="btn btn-outline"
+                    style={{ flex: 1, fontWeight: 600, fontSize: '13px', padding: '10px' }}
                   >
-                    Hoàn tất
+                    Đóng
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loadingVnpay}
+                    onClick={async () => {
+                      try {
+                        setLoadingVnpay(true);
+                        await api(`/bookings/${createdBooking.DonHangID}/request-cash`, {
+                          method: 'POST',
+                          body: JSON.stringify({
+                            ghiChu: `Khách xác nhận nộp tiền mặt tại quầy giao dịch VietTour cho đơn ${createdBooking.MaDon}`,
+                          }),
+                        });
+                        alert(
+                          `Đã ghi nhận đăng ký thanh toán tiền mặt tại quầy cho đơn ${createdBooking.MaDon}! Sau khi thu ngân/Admin xác nhận đã thu, trạng thái đơn sẽ chuyển sang "Đã thanh toán".`,
+                        );
+                        window.location.href = '/portal/my-bookings';
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : 'Không thể xác nhận thanh toán tại quầy');
+                      } finally {
+                        setLoadingVnpay(false);
+                      }
+                    }}
+                    className="btn btn-primary"
+                    style={{
+                      flex: 2,
+                      background: '#0F172A',
+                      borderColor: '#0F172A',
+                      fontWeight: 700,
+                      fontSize: '13px',
+                      padding: '10px',
+                    }}
+                  >
+                    {loadingVnpay ? 'Đang ghi nhận...' : 'Xác nhận thanh toán tiền mặt tại quầy'}
                   </button>
                 </div>
               </div>
             )}
 
-            <div style={{ marginTop: '12px', textAlign: 'center' }}>
-              <Link href={`/portal/ticket/${createdBooking.MaDon}`} style={{ fontSize: '13px', color: '#005BAA', fontWeight: 700 }}>
-                Xem trước vé điện tử Boarding Pass →
-              </Link>
+            <div style={{ marginTop: '12px', textAlign: 'center', fontSize: '12px', color: '#64748B' }}>
+              Vé điện tử &amp; Mã QR chỉ được kích hoạt sau khi đơn hàng hoàn tất thanh toán.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PHÓNG TO HÌNH ẢNH LỊCH TRÌNH */}
+      {previewImage && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.88)',
+            zIndex: 1300,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+          }}
+          onClick={() => setPreviewImage(null)}
+        >
+          <div
+            style={{
+              position: 'relative',
+              maxWidth: '900px',
+              width: '100%',
+              background: '#0F172A',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ position: 'relative', width: '100%', height: '520px', background: '#000' }}>
+              <img
+                src={previewImage.url}
+                alt={previewImage.title}
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              />
+              <button
+                onClick={() => setPreviewImage(null)}
+                style={{
+                  position: 'absolute',
+                  top: '16px',
+                  right: '16px',
+                  background: 'rgba(0,0,0,0.7)',
+                  color: '#FFF',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  display: 'grid',
+                  placeItems: 'center',
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ padding: '16px 20px', background: '#0F172A', color: '#FFF' }}>
+              <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 700 }}>{previewImage.title}</h4>
+              <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#94A3B8' }}>Hình ảnh thực tế điểm đến trong hành trình tour {tour.TenTour}</p>
             </div>
           </div>
         </div>

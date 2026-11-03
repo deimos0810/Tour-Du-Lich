@@ -82,7 +82,10 @@ model NhanVien {
   ThanhToan       ThanhToan[]
   PhieuDatDichVu  PhieuDatDichVu[]
   DieuPhoiTour    DieuPhoiTour[]
-  BaoCaoQuyetToan BaoCaoQuyetToan[]
+  BaoCaoQuyetToan BaoCaoQuyetToan[] @relation("QuyetToanLap")
+  QuyetToanDuyet  BaoCaoQuyetToan[] @relation("QuyetToanDuyet")
+  ChuongTrinhKM   ChuongTrinhKhuyenMai[]
+  ChiPhiPhatSinh  ChiPhiPhatSinh[]
 
   @@map("nhanvien")
 }
@@ -134,7 +137,8 @@ model Tour {
   DanhMuc         DanhMucTour       @relation(fields: [DanhMucID], references: [DanhMucID])
   NhanVienTao     NhanVien          @relation(fields: [NhanVienTaoID], references: [NhanVienID])
   LichKhoiHanh    LichKhoiHanh[]
-  ApDungKhuyenMai ApDungKhuyenMai[]
+  ApDungVoucher   ApDungVoucher[]
+  ApDungCTKM      ApDungChuongTrinhKM[]
   DanhGia         DanhGia[]
 
   @@index([DanhMucID], map: "idx_tour_danhmuc")
@@ -150,6 +154,7 @@ model LichKhoiHanh {
   NgayKetThuc      DateTime         @map("ngayketthuc") @db.Timestamp(6)
   SoChoToiDa       Int              @map("sochotoida")
   SoChoDaDat       Int              @default(0) @map("sochodadat")
+  /// @deprecated: thay bằng ChuongTrinhKhuyenMai (giảm % theo tour, có thời hạn). Không còn dùng khi tính giá.
   GiaTourKhuyenMai Decimal?         @map("giatourkhuyenmai") @db.Decimal(15, 2)
   TrangThai        String           @default("Cho khoi hanh") @map("trangthai") @db.VarChar(20)
   Tour             Tour             @relation(fields: [TourID], references: [TourID])
@@ -157,39 +162,103 @@ model LichKhoiHanh {
   PhieuDatDichVu   PhieuDatDichVu[]
   DieuPhoiTour     DieuPhoiTour[]
   BaoCaoQuyetToan  BaoCaoQuyetToan?
+  ChiPhiPhatSinh   ChiPhiPhatSinh[]
 
   @@index([TourID], map: "idx_lich_tourid")
   @@index([NgayKhoiHanh], map: "idx_lich_ngaykhoihanh")
   @@map("lichkhoihanh")
 }
 
-// ============ 10-11. KHUYẾN MÃI ============
-model KhuyenMai {
-  KhuyenMaiID       Int               @id @default(autoincrement()) @map("khuyenmaiid")
-  MaKhuyenMai       String            @unique @map("makhuyenmai") @db.VarChar(50)
-  TenChuongTrinh    String            @map("tenchuongtrinh") @db.VarChar(200)
-  PhanTramGiam      Decimal           @map("phantramgiam") @db.Decimal(5, 2)
-  GiamToiDa         Decimal           @map("giamtoida") @db.Decimal(15, 2)
-  GiaTriDonToiThieu Decimal           @default(0) @map("giatridontoithieu") @db.Decimal(15, 2)
-  NgayBatDau        DateTime          @map("ngaybatdau") @db.Date
-  NgayKetThucKM     DateTime          @map("ngayketthuckm") @db.Date
-  TrangThai         Int               @default(1) @map("trangthai") @db.SmallInt
-  ApDungKhuyenMai   ApDungKhuyenMai[]
+// ============ 10-11. MÃ GIẢM GIÁ (VOUCHER) ============
+// Voucher = mã khách NHẬP khi đặt tour. Khác với "Khuyến mãi" (ChuongTrinhKhuyenMai): giảm giá tự động theo tour trong một khoảng thời gian.
+model Voucher {
+  VoucherID         Int             @id @default(autoincrement()) @map("voucherid")
+  MaVoucher         String          @unique @map("mavoucher") @db.VarChar(50)
+  TenChuongTrinh    String          @map("tenchuongtrinh") @db.VarChar(200)
+  PhanTramGiam      Decimal         @map("phantramgiam") @db.Decimal(5, 2)
+  GiamToiDa         Decimal         @map("giamtoida") @db.Decimal(15, 2)
+  GiaTriDonToiThieu Decimal         @default(0) @map("giatridontoithieu") @db.Decimal(15, 2)
+  NgayBatDau        DateTime        @map("ngaybatdau") @db.Date
+  NgayKetThuc       DateTime        @map("ngayketthuc") @db.Date
+  SoLuongToiDa      Int?            @map("soluongtoida")
+  TrangThai         Int             @default(1) @map("trangthai") @db.SmallInt
+  ApDungVoucher     ApDungVoucher[]
   DonDatTour        DonDatTour[]
 
-  @@map("khuyenmai")
+  @@map("voucher")
 }
 
-model ApDungKhuyenMai {
-  ApDungKMID  Int       @id @default(autoincrement()) @map("apdungkmid")
-  KhuyenMaiID Int       @map("khuyenmaiid")
-  TourID      Int       @map("tourid")
-  NgayApDung  DateTime  @default(now()) @map("ngayapdung") @db.Date
-  KhuyenMai   KhuyenMai @relation(fields: [KhuyenMaiID], references: [KhuyenMaiID], onDelete: Cascade)
-  Tour        Tour      @relation(fields: [TourID], references: [TourID], onDelete: Cascade)
+// Voucher giới hạn theo tour. Không có dòng nào = áp dụng cho mọi tour.
+model ApDungVoucher {
+  ApDungVoucherID Int      @id @default(autoincrement()) @map("apdungvoucherid")
+  VoucherID       Int      @map("voucherid")
+  TourID          Int      @map("tourid")
+  NgayApDung      DateTime @default(now()) @map("ngayapdung") @db.Date
+  Voucher         Voucher  @relation(fields: [VoucherID], references: [VoucherID], onDelete: Cascade)
+  Tour            Tour     @relation(fields: [TourID], references: [TourID], onDelete: Cascade)
 
-  @@unique([KhuyenMaiID, TourID])
-  @@map("apdungkhuyenmai")
+  @@unique([VoucherID, TourID])
+  @@map("apdungvoucher")
+}
+
+// ============ KHUYẾN MÃI TOUR (giảm x% theo thời gian, tự hết hạn) ============
+model ChuongTrinhKhuyenMai {
+  CTKMID         Int                   @id @default(autoincrement()) @map("ctkmid")
+  TenChuongTrinh String                @map("tenchuongtrinh") @db.VarChar(200)
+  MoTa           String?               @map("mota")
+  PhanTramGiam   Decimal               @map("phantramgiam") @db.Decimal(5, 2)
+  NgayBatDau     DateTime              @map("ngaybatdau") @db.Timestamp(6)
+  NgayKetThuc    DateTime              @map("ngayketthuc") @db.Timestamp(6)
+  TrangThai      Int                   @default(1) @map("trangthai") @db.SmallInt
+  NhanVienTaoID  Int                   @map("nhanvientaoid")
+  NgayTao        DateTime              @default(now()) @map("ngaytao") @db.Timestamp(6)
+  NgayCapNhat    DateTime?             @map("ngaycapnhat") @db.Timestamp(6)
+  NhanVienTao    NhanVien              @relation(fields: [NhanVienTaoID], references: [NhanVienID])
+  ApDung         ApDungChuongTrinhKM[]
+  DonDatTour     DonDatTour[]
+
+  @@index([NgayBatDau, NgayKetThuc], map: "idx_ctkm_thoigian")
+  @@map("chuongtrinhkhuyenmai")
+}
+
+model ApDungChuongTrinhKM {
+  ApDungCTKMID Int                  @id @default(autoincrement()) @map("apdungctkmid")
+  CTKMID       Int                  @map("ctkmid")
+  TourID       Int                  @map("tourid")
+  CTKM         ChuongTrinhKhuyenMai @relation(fields: [CTKMID], references: [CTKMID], onDelete: Cascade)
+  Tour         Tour                 @relation(fields: [TourID], references: [TourID], onDelete: Cascade)
+
+  @@unique([CTKMID, TourID])
+  @@map("apdungctkm")
+}
+
+// ============ QUẢN LÝ NHẬN TIN (EMAIL) ============
+model DangKyNhanTin {
+  DangKyID    Int       @id @default(autoincrement()) @map("dangkyid")
+  Email       String    @unique @map("email") @db.VarChar(100)
+  KhachHangID Int?      @map("khachhangid")
+  Token       String    @unique @map("token") @db.VarChar(64)
+  TrangThai   Int       @default(1) @map("trangthai") @db.SmallInt
+  NguonDangKy String    @default("Website") @map("nguondangky") @db.VarChar(30)
+  NgayDangKy  DateTime  @default(now()) @map("ngaydangky") @db.Timestamp(6)
+  NgayHuy     DateTime? @map("ngayhuy") @db.Timestamp(6)
+
+  @@map("dangkynhantin")
+}
+
+model NhatKyGuiMail {
+  NhatKyID   Int      @id @default(autoincrement()) @map("nhatkyid")
+  LoaiMail   String   @map("loaimail") @db.VarChar(40)
+  EmailNhan  String   @map("emailnhan") @db.VarChar(100)
+  TieuDe     String   @map("tieude") @db.VarChar(255)
+  TrangThai  String   @map("trangthai") @db.VarChar(20)
+  ChiTietLoi String?  @map("chitietloi")
+  ThamChieu  String?  @map("thamchieu") @db.VarChar(100)
+  NgayGui    DateTime @default(now()) @map("ngaygui") @db.Timestamp(6)
+
+  @@index([LoaiMail, ThamChieu, EmailNhan], map: "idx_nhatkymail_dedupe")
+  @@index([NgayGui], map: "idx_nhatkymail_ngay")
+  @@map("nhatkyguimail")
 }
 
 // ============ 12-15. ĐƠN ĐẶT TOUR, THANH TOÁN, HÓA ĐƠN ============
@@ -198,13 +267,16 @@ model DonDatTour {
   KhachHangID      Int                @map("khachhangid")
   LichID           Int                @map("lichid")
   NhanVienXuLyID   Int?               @map("nhanvienxulyid")
-  KhuyenMaiID      Int?               @map("khuyenmaiid")
+  VoucherID        Int?               @map("voucherid")
+  CTKMID           Int?               @map("ctkmid")
   MaDon            String             @unique @map("madon") @db.VarChar(30)
   NgayDat          DateTime           @default(now()) @map("ngaydat") @db.Timestamp(6)
   SoLuongNguoiLon  Int                @default(1) @map("soluongnguoilon")
   SoLuongTreEm     Int                @default(0) @map("soluongtreem")
   TongTien         Decimal            @map("tongtien") @db.Decimal(15, 2)
+  /// Tổng giảm giá = GiamGiaKhuyenMai + giảm giá voucher (giữ nguyên ý nghĩa cũ để các báo cáo doanh thu thuần = TongTien - GiamGia)
   GiamGia          Decimal            @default(0) @map("giamgia") @db.Decimal(15, 2)
+  GiamGiaKhuyenMai Decimal            @default(0) @map("giamgiakhuyenmai") @db.Decimal(15, 2)
   TienCoc          Decimal            @default(0) @map("tiencoc") @db.Decimal(15, 2)
   TienConLai       Decimal            @default(0) @map("tienconlai") @db.Decimal(15, 2)
   TrangThaiDon     String             @default("Cho thanh toan") @map("trangthaidon") @db.VarChar(20)
@@ -213,7 +285,8 @@ model DonDatTour {
   KhachHang        KhachHang          @relation(fields: [KhachHangID], references: [KhachHangID])
   LichKhoiHanh     LichKhoiHanh       @relation(fields: [LichID], references: [LichID])
   NhanVienXuLy     NhanVien?          @relation(fields: [NhanVienXuLyID], references: [NhanVienID])
-  KhuyenMai        KhuyenMai?         @relation(fields: [KhuyenMaiID], references: [KhuyenMaiID])
+  Voucher          Voucher?           @relation(fields: [VoucherID], references: [VoucherID])
+  ChuongTrinhKM    ChuongTrinhKhuyenMai? @relation(fields: [CTKMID], references: [CTKMID])
   ChiTietHanhKhach ChiTietHanhKhach[]
   ThanhToan        ThanhToan[]
   HoaDon           HoaDon[]
@@ -285,7 +358,10 @@ model NhaCungCap {
   SoDienThoai    String             @map("sodienthoai") @db.VarChar(20)
   Email          String?            @map("email") @db.VarChar(100)
   DiaChi         String?            @map("diachi") @db.VarChar(255)
+  MaSoThue       String?            @map("masothue") @db.VarChar(20)
   DanhGia        Decimal?           @map("danhgia") @db.Decimal(3, 2)
+  /// 1 = đang hợp tác, 0 = ngừng hợp tác (không xóa để giữ lịch sử chi phí)
+  TrangThai      Int                @default(1) @map("trangthai") @db.SmallInt
   DichVu         DichVuNhaCungCap[]
   PhieuDatDichVu PhieuDatDichVu[]
 
@@ -300,6 +376,7 @@ model DichVuNhaCungCap {
   DonGia           Decimal            @map("dongia") @db.Decimal(15, 2)
   DonViTinh        String             @map("donvitinh") @db.VarChar(50)
   MoTa             String?            @map("mota")
+  TrangThai        Int                @default(1) @map("trangthai") @db.SmallInt
   NhaCungCap       NhaCungCap         @relation(fields: [NhaCungCapID], references: [NhaCungCapID], onDelete: Cascade)
   ChiTietDatDichVu ChiTietDatDichVu[]
 
@@ -314,9 +391,12 @@ model PhieuDatDichVu {
   MaPhieu        String             @unique @map("maphieu") @db.VarChar(30)
   NgayDat        DateTime           @default(now()) @map("ngaydat") @db.Date
   TongTienDichVu Decimal            @default(0) @map("tongtiendichvu") @db.Decimal(15, 2)
+  /// Tổng tiền đã trả NCC (gồm tiền cọc + các lần thanh toán sau). Công nợ phải trả = TongTienDichVu - TienDaCoc
   TienDaCoc      Decimal            @default(0) @map("tiendacoc") @db.Decimal(15, 2)
   TrangThai      String             @default("Moi tao") @map("trangthai") @db.VarChar(20)
   GhiChu         String?            @map("ghichu")
+  HanThanhToan   DateTime?          @map("hanthanhtoan") @db.Date
+  SoHoaDonNCC    String?            @map("sohoadonncc") @db.VarChar(50)
   LichKhoiHanh   LichKhoiHanh       @relation(fields: [LichID], references: [LichID])
   NhanVien       NhanVien           @relation(fields: [NhanVienID], references: [NhanVienID])
   NhaCungCap     NhaCungCap         @relation(fields: [NhaCungCapID], references: [NhaCungCapID])
@@ -378,19 +458,50 @@ model DanhGia {
   @@map("danhgia")
 }
 
+// Quyết toán 1 chuyến: Nhap -> Da trinh duyet -> (Da phe duyet [khóa sổ] | Yeu cau chinh sua -> lập lại)
 model BaoCaoQuyetToan {
   QuyetToanID    Int          @id @default(autoincrement()) @map("quyettoanid")
   LichID         Int          @unique @map("lichid")
   NhanVienLapID  Int          @map("nhanvienlapid")
+  /// Doanh thu ghi nhận (thuần, sau giảm giá) = Σ đơn không hủy (TongTien - GiamGia) + phí hủy giữ lại
   TongThu        Decimal      @default(0) @map("tongthu") @db.Decimal(15, 2)
+  /// = ChiPhiNCC + ChiPhiHDV + ChiPhiKhac
   TongChi        Decimal      @default(0) @map("tongchi") @db.Decimal(15, 2)
   // Cột GENERATED trong SQL (TongThu - TongChi) -> chỉ đọc, không ghi
   LoiNhuan       Decimal?     @map("loinhuan") @db.Decimal(15, 2)
+  ThucThu        Decimal      @default(0) @map("thucthu") @db.Decimal(15, 2)
+  CongNoPhaiThu  Decimal      @default(0) @map("congnophaithu") @db.Decimal(15, 2)
+  ChiPhiNCC      Decimal      @default(0) @map("chiphincc") @db.Decimal(15, 2)
+  ChiPhiHDV      Decimal      @default(0) @map("chiphihdv") @db.Decimal(15, 2)
+  ChiPhiKhac     Decimal      @default(0) @map("chiphikhac") @db.Decimal(15, 2)
+  CongNoPhaiTra  Decimal      @default(0) @map("congnophaitra") @db.Decimal(15, 2)
   NgayLap        DateTime     @default(now()) @map("ngaylap") @db.Timestamp(6)
   TrangThaiDuyet String       @default("Nhap") @map("trangthaiduyet") @db.VarChar(20)
   GhiChu         String?      @map("ghichu")
+  NhanVienDuyetID Int?        @map("nhanvienduyetid")
+  NgayDuyet      DateTime?    @map("ngayduyet") @db.Timestamp(6)
+  LyDoTraLai     String?      @map("lydotralai")
   LichKhoiHanh   LichKhoiHanh @relation(fields: [LichID], references: [LichID])
-  NhanVienLap    NhanVien     @relation(fields: [NhanVienLapID], references: [NhanVienID])
+  NhanVienLap    NhanVien     @relation("QuyetToanLap", fields: [NhanVienLapID], references: [NhanVienID])
+  NhanVienDuyet  NhanVien?    @relation("QuyetToanDuyet", fields: [NhanVienDuyetID], references: [NhanVienID])
 
   @@map("baocaoquyettoan")
+}
+
+// Chi phí phát sinh ngoài phiếu NCC & lương HDV (vé tham quan, bảo hiểm, ăn uống phát sinh, marketing...)
+model ChiPhiPhatSinh {
+  ChiPhiID   Int          @id @default(autoincrement()) @map("chiphiid")
+  LichID     Int          @map("lichid")
+  NhanVienID Int          @map("nhanvienid")
+  LoaiChiPhi String       @map("loaichiphi") @db.VarChar(40)
+  NoiDung    String       @map("noidung") @db.VarChar(255)
+  SoTien     Decimal      @map("sotien") @db.Decimal(15, 2)
+  NgayChi    DateTime     @default(now()) @map("ngaychi") @db.Date
+  SoChungTu  String?      @map("sochungtu") @db.VarChar(50)
+  GhiChu     String?      @map("ghichu")
+  LichKhoiHanh LichKhoiHanh @relation(fields: [LichID], references: [LichID])
+  NhanVien   NhanVien     @relation(fields: [NhanVienID], references: [NhanVienID])
+
+  @@index([LichID], map: "idx_chiphi_lich")
+  @@map("chiphiphatsinh")
 }

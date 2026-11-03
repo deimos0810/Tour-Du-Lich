@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoundException, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Injectable, Module, NotFoundException, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
@@ -7,8 +7,27 @@ import type { JwtPayload } from '../common/jwt.config.js';
 import { createMailTransporter } from '../common/mailer.js';
 import { Prisma } from '@prisma/client';
 import * as nodemailer from 'nodemailer';
+import * as os from 'os';
 import { PrismaService } from '../prisma/prisma.module.js';
 import { hashPassword, isHashed, validatePasswordStrength, verifyPassword } from '../common/password.js';
+
+function getLocalLanIp(): string | null {
+  try {
+    const nets = os.networkInterfaces();
+    const candidates: string[] = [];
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name] || []) {
+        if (net.family === 'IPv4' && !net.internal) {
+          candidates.push(net.address);
+        }
+      }
+    }
+    const preferred = candidates.find((ip) => ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.'));
+    return preferred || candidates[0] || null;
+  } catch {
+    return null;
+  }
+}
 
 // In-memory store cho mã OTP lấy lại mật khẩu: Key là Email, Value là { code, expiresAt }
 const otpStore = new Map<string, { code: string; expiresAt: number }>();
@@ -76,7 +95,7 @@ export class AuthService {
       include: {
         PhanQuyen: { include: { VaiTro: true } },
         KhachHang: true,
-        NhanVien: true,
+        NhanVien: { include: { HuongDanVien: true } },
       },
     });
 
@@ -105,7 +124,7 @@ export class AuthService {
     } else if (primaryRole === 'Ke toan') {
       redirectUrl = '/bookings';
     } else if (primaryRole === 'HDV') {
-      redirectUrl = '/departures';
+      redirectUrl = '/my-schedule';
     }
 
     const payload: JwtPayload = {
@@ -117,8 +136,11 @@ export class AuthService {
       employeeId: tk.NhanVien?.NhanVienID || null,
     };
 
+    const signedToken = await this.jwt.signAsync(payload);
     return {
-      token: await this.jwt.signAsync(payload),
+      token: signedToken,
+      accessToken: signedToken,
+      refreshToken: signedToken,
       user: {
         id: tk.TaiKhoanID,
         email: tk.Email,
@@ -128,9 +150,150 @@ export class AuthService {
         name: tk.KhachHang?.HoTen || tk.NhanVien?.HoTen || tk.Email.split('@')[0],
         customerId: tk.KhachHang?.KhachHangID || null,
         employeeId: tk.NhanVien?.NhanVienID || null,
+        hdvId: tk.NhanVien?.HuongDanVien?.HDVID || null,
+        soTheHdv: tk.NhanVien?.HuongDanVien?.SoTheHDV || null,
         redirectUrl,
       },
     };
+  }
+
+  /** Chuyển đổi nhanh giữa các tài khoản đã lưu trên thiết bị (Khách hàng ⇄ Hướng dẫn viên ⇄ Admin) */
+  async quickSwitchAccount(email: string) {
+    if (!email || !email.trim()) {
+      throw new BadRequestException('Vui lòng chọn tài khoản cần chuyển đổi');
+    }
+    const tk = await this.prisma.taiKhoan.findUnique({
+      where: { Email: email.trim() },
+      include: {
+        PhanQuyen: { include: { VaiTro: true } },
+        KhachHang: true,
+        NhanVien: { include: { HuongDanVien: true } },
+      },
+    });
+    if (!tk) {
+      throw new NotFoundException(`Không tìm thấy tài khoản với email: ${email}`);
+    }
+    if (tk.TrangThai === 0) {
+      throw new BadRequestException('Tài khoản này đang bị khóa!');
+    }
+
+    const roles = tk.PhanQuyen.map((p) => p.VaiTro.TenVaiTro);
+    const primaryRole = roles[0] || 'Khach hang';
+    let redirectUrl = '/portal';
+    if (primaryRole === 'Admin') redirectUrl = '/';
+    else if (primaryRole === 'Dieu hanh') redirectUrl = '/tours';
+    else if (primaryRole === 'Ke toan') redirectUrl = '/bookings';
+    else if (primaryRole === 'HDV') redirectUrl = '/my-schedule';
+
+    const payload: JwtPayload = {
+      sub: tk.TaiKhoanID,
+      email: tk.Email,
+      roles,
+      primaryRole,
+      customerId: tk.KhachHang?.KhachHangID || null,
+      employeeId: tk.NhanVien?.NhanVienID || null,
+    };
+    const signedToken = await this.jwt.signAsync(payload);
+    return {
+      token: signedToken,
+      accessToken: signedToken,
+      refreshToken: signedToken,
+      user: {
+        id: tk.TaiKhoanID,
+        email: tk.Email,
+        phone: tk.SoDienThoai,
+        roles,
+        primaryRole,
+        name: tk.KhachHang?.HoTen || tk.NhanVien?.HoTen || tk.Email.split('@')[0],
+        hoTen: tk.KhachHang?.HoTen || tk.NhanVien?.HoTen || tk.Email.split('@')[0],
+        customerId: tk.KhachHang?.KhachHangID || null,
+        employeeId: tk.NhanVien?.NhanVienID || null,
+        hdvId: tk.NhanVien?.HuongDanVien?.HDVID || null,
+        soTheHdv: tk.NhanVien?.HuongDanVien?.SoTheHDV || null,
+        redirectUrl,
+      },
+    };
+  }
+
+  /** Lấy danh sách các tài khoản mẫu / gần đây để phục vụ chuyển đổi nhanh khi demo nghiệp vụ */
+  async getQuickAccounts() {
+    const accounts = await this.prisma.taiKhoan.findMany({
+      where: { TrangThai: 1 },
+      include: {
+        PhanQuyen: { include: { VaiTro: true } },
+        KhachHang: true,
+        NhanVien: { include: { HuongDanVien: true } },
+      },
+      orderBy: { TaiKhoanID: 'asc' },
+      take: 15,
+    });
+    return accounts.map((tk) => {
+      const roles = tk.PhanQuyen.map((p) => p.VaiTro.TenVaiTro);
+      const primaryRole = roles[0] || 'Khach hang';
+      return {
+        id: tk.TaiKhoanID,
+        email: tk.Email,
+        phone: tk.SoDienThoai,
+        name: tk.KhachHang?.HoTen || tk.NhanVien?.HoTen || tk.Email.split('@')[0],
+        primaryRole,
+        roles,
+        customerId: tk.KhachHang?.KhachHangID || null,
+        employeeId: tk.NhanVien?.NhanVienID || null,
+        hdvId: tk.NhanVien?.HuongDanVien?.HDVID || null,
+      };
+    });
+  }
+
+  async getMe(userId: number) {
+    const tk = await this.prisma.taiKhoan.findUnique({
+      where: { TaiKhoanID: userId },
+      include: {
+        PhanQuyen: { include: { VaiTro: true } },
+        KhachHang: true,
+        NhanVien: { include: { HuongDanVien: true } },
+      },
+    });
+    if (!tk) throw new NotFoundException('Không tìm thấy tài khoản');
+    const roles = tk.PhanQuyen.map((p) => p.VaiTro.TenVaiTro);
+    const primaryRole = roles[0] || 'Khach hang';
+    return {
+      id: tk.TaiKhoanID,
+      email: tk.Email,
+      phone: tk.SoDienThoai,
+      roles,
+      primaryRole,
+      name: tk.KhachHang?.HoTen || tk.NhanVien?.HoTen || tk.Email.split('@')[0],
+      hoTen: tk.KhachHang?.HoTen || tk.NhanVien?.HoTen || tk.Email.split('@')[0],
+      customerId: tk.KhachHang?.KhachHangID || null,
+      employeeId: tk.NhanVien?.NhanVienID || null,
+      hdvId: tk.NhanVien?.HuongDanVien?.HDVID || null,
+      soTheHdv: tk.NhanVien?.HuongDanVien?.SoTheHDV || null,
+    };
+  }
+
+  async updateProfile(userId: number, dto: { hoTen?: string; phone?: string; email?: string; ngaySinh?: string }) {
+    const tk = await this.prisma.taiKhoan.findUnique({
+      where: { TaiKhoanID: userId },
+      include: { KhachHang: true, NhanVien: true },
+    });
+    if (!tk) throw new NotFoundException('Không tìm thấy tài khoản');
+    if (dto.phone) {
+      await this.prisma.taiKhoan.update({
+        where: { TaiKhoanID: userId },
+        data: { SoDienThoai: dto.phone },
+      });
+    }
+    if (tk.KhachHang) {
+      await this.prisma.khachHang.update({
+        where: { KhachHangID: tk.KhachHang.KhachHangID },
+        data: {
+          HoTen: dto.hoTen || tk.KhachHang.HoTen,
+          SoDienThoai: dto.phone || tk.KhachHang.SoDienThoai,
+          NgaySinh: dto.ngaySinh ? new Date(dto.ngaySinh) : tk.KhachHang.NgaySinh,
+        },
+      });
+    }
+    return this.getMe(userId);
   }
 
   private getTransporter() {
@@ -163,29 +326,27 @@ export class AuthService {
         to: email,
         subject: '[VietTour] Mã OTP Khôi Phục Mật Khẩu',
         html: `
-          <div style="font-family: Arial, sans-serif; padding: 28px; border: 1px solid #e2e8f0; border-radius: 14px; max-width: 520px; background-color: #ffffff; margin: 0 auto;">
-            <div style="text-align: center; margin-bottom: 24px;">
-              <div style="display: inline-block; background: linear-gradient(135deg, #0d6efd 0%, #1d4ed8 100%); color: #ffffff; width: 50px; height: 50px; line-height: 50px; border-radius: 12px; font-weight: 900; font-size: 22px; text-align: center;">VT</div>
-              <h2 style="color: #0f172a; margin-top: 14px; margin-bottom: 4px; font-size: 22px; font-weight: 800;">Khôi Phục Mật Khẩu VietTour</h2>
-              <p style="color: #64748b; font-size: 13px; margin: 0;">Hệ thống Quản lý & Đặt tour Du lịch VietTour</p>
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; max-width: 560px; margin: 0 auto; background-color: #ffffff; color: #111111; border: 1px solid #e5e7eb; border-radius: 6px; padding: 28px 32px; line-height: 1.6;">
+            <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 14px; margin-bottom: 20px;">
+              <div style="font-size: 16px; font-weight: 700; color: #111111; letter-spacing: 0.5px;">VIETTOUR</div>
+              <div style="font-size: 13px; color: #4b5563; margin-top: 2px;">Xác thực khôi phục mật khẩu tài khoản</div>
             </div>
             
-            <p style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 12px;">Xin chào <strong>${email}</strong>,</p>
-            <p style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 20px;">Bạn vừa gửi yêu cầu mã OTP xác thực để thiết lập lại mật khẩu tài khoản VietTour. Mã xác thực 6 số của bạn là:</p>
+            <p style="color: #111111; font-size: 14px; margin: 0 0 12px;">Xin chào <strong>${email}</strong>,</p>
+            <p style="color: #374151; font-size: 14px; margin: 0 0 18px;">Hệ thống nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn. Vui lòng sử dụng mã xác thực (OTP) gồm 6 chữ số dưới đây:</p>
             
-            <div style="font-size: 34px; font-weight: 900; letter-spacing: 8px; color: #0d6efd; background: #f8fafc; border: 2px dashed #cbd5e1; padding: 18px 24px; text-align: center; border-radius: 10px; margin: 24px 0;">
+            <div style="font-size: 26px; font-weight: 700; letter-spacing: 6px; color: #111111; background: #ffffff; border: 1px solid #d1d5db; padding: 14px 20px; text-align: center; border-radius: 6px; margin: 20px 0; font-family: monospace;">
               ${otpCode}
             </div>
 
-            <p style="font-size: 13px; color: #64748b; line-height: 1.6; margin-bottom: 16px;">
-              • Mã OTP này có hiệu lực trong vòng <strong>5 phút</strong>.<br/>
-              • Tuyệt đối không chia sẻ mã xác thực này cho bất kỳ ai khác để bảo vệ tài khoản của bạn.
+            <p style="font-size: 13px; color: #4b5563; margin: 0 0 20px;">
+              Mã xác thực có hiệu lực trong vòng <strong>5 phút</strong>. Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này.
             </p>
 
-            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
-            <p style="font-size: 12px; color: #94a3b8; text-align: center; margin: 0;">
-              © 2026 VietTour System. Đây là email tự động từ hệ thống, vui lòng không phản hồi lại thư này.
-            </p>
+            <div style="border-top: 1px solid #e5e7eb; padding-top: 14px; font-size: 12px; color: #6b7280;">
+              <div>Công ty Cổ phần Du lịch &amp; Lữ hành VietTour</div>
+              <div>Quầy giao dịch: Ga Quốc Nội, Sân bay Quốc tế Tân Sơn Nhất, TP.HCM • Hotline: 1900 1234</div>
+            </div>
           </div>
         `,
       });
@@ -291,39 +452,65 @@ export class AuthService {
       const tongTien = giaNL * dto.soLuongNguoiLon + giaTE * dto.soLuongTreEm;
       const maDon = `BK-${Date.now().toString().slice(-6)}${Math.floor(10 + Math.random() * 90)}`;
 
-      // Kiểm tra và áp dụng mã khuyến mãi nếu có
-      let giamGia = 0;
-      let khuyenMaiId: number | null = null;
+      // 1. Kiểm tra Khuyến mãi tour (CTKM) đang diễn ra theo thời gian thực
+      const now = new Date();
+      const activeCTKMs = await tx.chuongTrinhKhuyenMai.findMany({
+        where: {
+          TrangThai: 1,
+          NgayBatDau: { lte: now },
+          NgayKetThuc: { gte: now },
+          ApDung: { some: { TourID: lich.TourID } },
+        },
+        orderBy: { PhanTramGiam: 'desc' },
+      });
+      const ctkm = activeCTKMs[0] || null;
+      let giamGiaKM = 0;
+      let ctkmId: number | null = null;
+      if (ctkm) {
+        ctkmId = ctkm.CTKMID;
+        giamGiaKM = Math.round((tongTien * Number(ctkm.PhanTramGiam)) / 100);
+      }
+
+      // 2. Kiểm tra và áp dụng mã Voucher nhập tay nếu có (tính trên tiền sau CTKM tour)
+      let giamGiaVoucher = 0;
+      let voucherId: number | null = null;
+      const tienSauKM = Math.max(tongTien - giamGiaKM, 0);
       if (dto.maKhuyenMai) {
-        const km = await tx.khuyenMai.findUnique({ where: { MaKhuyenMai: dto.maKhuyenMai } });
-        const now = new Date();
+        const vc = await tx.voucher.findUnique({
+          where: { MaVoucher: dto.maKhuyenMai },
+          include: { ApDungVoucher: true },
+        });
         if (
-          km &&
-          km.TrangThai === 1 &&
-          now >= km.NgayBatDau &&
-          now <= km.NgayKetThucKM &&
-          tongTien >= Number(km.GiaTriDonToiThieu)
+          vc &&
+          vc.TrangThai === 1 &&
+          now >= vc.NgayBatDau &&
+          now <= vc.NgayKetThuc &&
+          tienSauKM >= Number(vc.GiaTriDonToiThieu) &&
+          (vc.ApDungVoucher.length === 0 || vc.ApDungVoucher.some((a) => a.TourID === lich.TourID))
         ) {
-          giamGia = Math.min(
-            Math.round((tongTien * Number(km.PhanTramGiam)) / 100),
-            Number(km.GiamToiDa),
+          giamGiaVoucher = Math.min(
+            Math.round((tienSauKM * Number(vc.PhanTramGiam)) / 100),
+            Number(vc.GiamToiDa),
           );
-          khuyenMaiId = km.KhuyenMaiID;
+          voucherId = vc.VoucherID;
         }
       }
 
-      const tienConLai = Math.max(tongTien - giamGia, 0);
+      const tongGiamGia = giamGiaKM + giamGiaVoucher;
+      const tienConLai = Math.max(tongTien - tongGiamGia, 0);
 
       const don = await tx.donDatTour.create({
         data: {
           KhachHangID: dto.khachHangId,
           LichID: dto.lichId,
-          KhuyenMaiID: khuyenMaiId,
+          VoucherID: voucherId,
+          CTKMID: ctkmId,
           MaDon: maDon,
           SoLuongNguoiLon: dto.soLuongNguoiLon,
           SoLuongTreEm: dto.soLuongTreEm,
           TongTien: tongTien,
-          GiamGia: giamGia,
+          GiamGia: tongGiamGia,
+          GiamGiaKhuyenMai: giamGiaKM,
           TienCoc: 0,
           TienConLai: tienConLai,
           TrangThaiDon: 'Cho thanh toan',
@@ -388,6 +575,51 @@ export class AuthController {
     return this.service.login(body);
   }
 
+  @Post('quick-switch')
+  quickSwitch(@Body() body: { email: string }) {
+    return this.service.quickSwitchAccount(body.email);
+  }
+
+  @Get('quick-accounts')
+  quickAccounts() {
+    return this.service.getQuickAccounts();
+  }
+
+  @Post('refresh')
+  refresh(@Body('refreshToken') refreshToken: string) {
+    return {
+      token: refreshToken,
+      accessToken: refreshToken,
+      refreshToken,
+    };
+  }
+
+  @Post('logout')
+  logout() {
+    return { success: true, message: 'Đã đăng xuất thành công' };
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  me(@Req() req: { user: JwtPayload }) {
+    return this.service.getMe(req.user.sub);
+  }
+
+  @Get('profile')
+  @UseGuards(JwtAuthGuard)
+  getProfile(@Req() req: { user: JwtPayload }) {
+    return this.service.getMe(req.user.sub);
+  }
+
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  updateProfile(
+    @Req() req: { user: JwtPayload },
+    @Body() body: { hoTen?: string; phone?: string; email?: string; ngaySinh?: string },
+  ) {
+    return this.service.updateProfile(req.user.sub, body);
+  }
+
   @Post('forgot-password')
   forgotPassword(@Body('email') email: string) {
     return this.service.sendForgotPasswordOTP(email);
@@ -427,14 +659,60 @@ export class AuthController {
 
 @Controller('portal')
 export class PortalController {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private jwt: JwtService) { }
 
   @Get('my-bookings')
-  async getMyBookings(@Query('customerId') customerId?: string) {
-    const cid = customerId && !Number.isNaN(Number(customerId)) ? Number(customerId) : 1;
-    return this.prisma.donDatTour.findMany({
-      where: { KhachHangID: cid },
+  async getMyBookings(@Query('customerId') customerId?: string, @Req() req?: any) {
+    let cid = customerId && !Number.isNaN(Number(customerId)) ? Number(customerId) : null;
+    let isStaffOrGuide = false;
+    let decodedToken: JwtPayload | null = null;
+    if (!cid && req?.headers?.authorization) {
+      const authHeader = String(req.headers.authorization);
+      if (authHeader.startsWith('Bearer ')) {
+        try {
+          decodedToken = await this.jwt.verifyAsync<JwtPayload>(authHeader.slice(7));
+          if (decodedToken?.customerId) {
+            cid = Number(decodedToken.customerId);
+          } else if (
+            decodedToken?.employeeId ||
+            (decodedToken?.roles && decodedToken.roles.some((r) => ['HDV', 'Admin', 'Dieu hanh', 'Ke toan'].includes(r)))
+          ) {
+            isStaffOrGuide = true;
+          }
+        } catch {
+          // ignore invalid token
+        }
+      }
+    }
+    if (!cid && !isStaffOrGuide) cid = 1;
+    let whereClause: any = { KhachHangID: cid ?? -1 };
+    if (isStaffOrGuide && decodedToken) {
+      const roles: string[] = decodedToken?.roles || [];
+      const sub = Number(decodedToken?.sub);
+      if (roles.includes('HDV') && !roles.includes('Admin') && !roles.includes('Dieu hanh')) {
+        const hdv = await this.prisma.huongDanVien.findFirst({
+          where: { NhanVien: { TaiKhoanID: sub } },
+          select: { HDVID: true },
+        });
+        if (hdv) {
+          const dispatches = await this.prisma.dieuPhoiTour.findMany({
+            where: { HDVID: hdv.HDVID, TrangThai: { not: 'Tu choi' } },
+            select: { LichID: true },
+          });
+          const lichIds = dispatches.map((d) => d.LichID);
+          whereClause = { LichID: { in: lichIds.length ? lichIds : [-1] } };
+        } else {
+          whereClause = { DonHangID: -1 };
+        }
+      } else {
+        whereClause = {};
+      }
+    }
+
+    const rows = await this.prisma.donDatTour.findMany({
+      where: whereClause,
       include: {
+        KhachHang: true,
         LichKhoiHanh: {
           include: {
             Tour: true,
@@ -444,9 +722,83 @@ export class PortalController {
         ThanhToan: {
           orderBy: { NgayThanhToan: 'desc' },
         },
-        KhuyenMai: true,
+        Voucher: true,
+        ChuongTrinhKM: true,
+        DanhGia: {
+          select: {
+            DanhGiaID: true,
+            SoSao: true,
+            BinhLuan: true,
+            NgayDanhGia: true,
+          },
+        },
       },
       orderBy: { NgayDat: 'desc' },
+    });
+    const lanIp = getLocalLanIp();
+    return rows.map((r) => ({ ...r, lanIp }));
+  }
+
+  @Get('cancellation-notices')
+  async getCancellationNotices(@Query('customerId') customerId?: string) {
+    const cid = customerId && !Number.isNaN(Number(customerId)) ? Number(customerId) : null;
+    if (!cid) return [];
+
+    const cancelledBookings = await this.prisma.donDatTour.findMany({
+      where: {
+        KhachHangID: cid,
+        TrangThaiDon: 'Da huy',
+      },
+      include: {
+        LichKhoiHanh: {
+          include: {
+            Tour: {
+              select: {
+                TourID: true,
+                TenTour: true,
+                MaTour: true,
+                HinhAnhURL: true,
+                ThoiGian: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { NgayDat: 'desc' },
+    });
+
+    return cancelledBookings.map((b) => {
+      let adminReason = '';
+      let cancelTime = '';
+      const rawNote = b.GhiChu || '';
+
+      if (rawNote.includes('[QUẢN TRỊ VIÊN HỦY]')) {
+        const parts = rawNote.split('[QUẢN TRỊ VIÊN HỦY]');
+        const latestPart = parts[parts.length - 1];
+        const reasonMatch = latestPart.match(/-\s*Lý do:\s*([\s\S]*)/i);
+        adminReason = reasonMatch ? reasonMatch[1].trim() : latestPart.trim();
+        const timeMatch = latestPart.match(/(\d{2}:\d{2}\s+\d{1,2}\/\d{1,2}\/\d{4})/);
+        cancelTime = timeMatch ? timeMatch[1] : '';
+      } else if (rawNote.includes('Khách hủy')) {
+        adminReason = rawNote;
+      } else {
+        adminReason = rawNote || 'Đơn hàng đã bị hủy bởi quản trị viên';
+      }
+
+      return {
+        donHangId: b.DonHangID,
+        maDon: b.MaDon,
+        tenTour: b.LichKhoiHanh?.Tour?.TenTour || 'Tour du lịch',
+        maTour: b.LichKhoiHanh?.Tour?.MaTour || '',
+        hinhAnhUrl: b.LichKhoiHanh?.Tour?.HinhAnhURL || null,
+        thoiGian: b.LichKhoiHanh?.Tour?.ThoiGian || '',
+        ngayKhoiHanh: b.LichKhoiHanh?.NgayKhoiHanh,
+        tongTien: b.TongTien,
+        ghiChu: b.GhiChu,
+        lyDoHuy: adminReason,
+        cancelTime: cancelTime,
+        isAdminCancelled: rawNote.includes('[QUẢN TRỊ VIÊN HỦY]'),
+      };
     });
   }
 }

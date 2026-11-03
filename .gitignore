@@ -27,7 +27,6 @@ lerna-debug.log*
 .turbo
 *.tsbuildinfo
 frontend/AGENTS.md
-frontend/CLAUDE.md
 
 # Mobile (Flutter)
 mobile/build/
@@ -49,3 +48,6 @@ mobile/.pub/
 .DS_Store
 Thumbs.db
 repopack-output.txt
+
+mobile-customer/
+customer-mobile/

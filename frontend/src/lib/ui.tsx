@@ -9,21 +9,89 @@ type Tone = 'success' | 'warning' | 'danger' | 'info' | 'muted';
 
 const STATUS: Record<string, [string, Tone]> = {
   // Tour.TrangThaiDuyet
-  'Nhap': ['Nháp', 'muted'], 'Cho duyet': ['Chờ duyệt', 'warning'], 'Da duyet': ['Đã duyệt', 'info'],
-  'Dang mo ban': ['Đang mở bán', 'success'], 'Dong ban': ['Tạm dừng', 'warning'], 'Huy': ['Đã hủy', 'danger'],
+  'Nhap': ['Nháp', 'muted'],
+  'Cho duyet': ['Chờ duyệt', 'warning'],
+  'Chờ duyệt': ['Chờ duyệt', 'warning'],
+  'Da duyet': ['Đã duyệt', 'info'],
+  'Đã duyệt': ['Đã duyệt', 'info'],
+  'Dang mo ban': ['Đang mở bán', 'success'],
+  'Đang mở bán': ['Đang mở bán', 'success'],
+  'Dong ban': ['Tạm dừng', 'warning'],
+  'Huy': ['Đã hủy', 'danger'],
+  'Đã hủy': ['Đã hủy', 'danger'],
+
   // LichKhoiHanh.TrangThai
-  'Cho khoi hanh': ['Mở bán', 'success'], 'Dang di': ['Đã khởi hành', 'info'], 'Hoan thanh': ['Hoàn thành', 'muted'],
+  'Cho khoi hanh': ['Chờ khởi hành', 'success'],
+  'Chờ khởi hành': ['Chờ khởi hành', 'success'],
+  'Dang di': ['Đang diễn ra', 'info'],
+  'Đang đi': ['Đang diễn ra', 'info'],
+  'Hoan thanh': ['Hoàn thành', 'muted'],
+  'Hoàn thành': ['Hoàn thành', 'muted'],
+  'Dong': ['Đã đóng', 'danger'],
+  'Đóng': ['Đã đóng', 'danger'],
+
   // DonDatTour.TrangThaiDon
-  'Cho thanh toan': ['Chờ thanh toán', 'warning'], 'Da dat coc': ['Đã xác nhận', 'info'], 'Da thanh toan': ['Đã hoàn thành', 'success'],
-  'Da xac nhan': ['Đã xác nhận', 'info'], 'Dang thuc hien': ['Đang thực hiện', 'info'], 'Da huy': ['Đã hủy', 'danger'],
+  'Cho thanh toan': ['Chờ thanh toán', 'warning'],
+  'Chờ thanh toán': ['Chờ thanh toán', 'warning'],
+  'Da dat coc': ['Đã đặt cọc', 'info'],
+  'Đã đặt cọc': ['Đã đặt cọc', 'info'],
+  'Da thanh toan': ['Đã thanh toán', 'success'],
+  'Đã thanh toán': ['Đã thanh toán', 'success'],
+  'Da xac nhan': ['Đã xác nhận', 'info'],
+  'Đã xác nhận': ['Đã xác nhận', 'info'],
+  'Dang thuc hien': ['Đang thực hiện', 'info'],
+  'Đang thực hiện': ['Đang thực hiện', 'info'],
+  'Da huy': ['Đã hủy', 'danger'],
+
   // HuongDanVien.TrangThai
-  'San sang': ['Sẵn sàng', 'success'], 'Dang di tour': ['Đang đi tour', 'info'], 'Nghi phep': ['Nghỉ phép', 'warning'], 'Nghi viec': ['Nghỉ việc', 'muted'],
+  'San sang': ['Sẵn sàng', 'success'],
+  'Sẵn sàng': ['Sẵn sàng', 'success'],
+  'Dang di tour': ['Đang đi tour', 'info'],
+  'Dang ban': ['Đang bận', 'info'],
+  'Nghi phep': ['Nghỉ phép', 'warning'],
+  'Nghi viec': ['Nghỉ việc', 'muted'],
+
+  // DieuPhoiTour.TrangThai (Phân công HDV)
+  'Da phan cong': ['Đã phân công', 'warning'],
+  'Đã phân công': ['Đã phân công', 'warning'],
+  'Cho xac nhan': ['Chờ xác nhận', 'warning'],
+  'Chờ xác nhận': ['Chờ xác nhận', 'warning'],
+  'Chap nhan': ['Đã chấp nhận', 'success'],
+  'Đã chấp nhận': ['Đã chấp nhận', 'success'],
+  'Tu choi': ['Đã từ chối', 'danger'],
+  'Đã từ chối': ['Đã từ chối', 'danger'],
+
+  // PhieuDatDichVu.TrangThai (Nhà cung cấp NCC)
+  'NCC xac nhan': ['NCC đã xác nhận', 'success'],
+  'NCC đã xác nhận': ['NCC đã xác nhận', 'success'],
+  'NCC tu choi': ['NCC từ chối', 'danger'],
+  'NCC từ chối': ['NCC từ chối', 'danger'],
+  'Cho NCC xac nhan': ['Chờ NCC xác nhận', 'warning'],
+  'Da thanh toan toan bo': ['Đã thanh toán', 'success'],
+
   // BaoCaoQuyetToan.TrangThaiDuyet
-  'Da trinh duyet': ['Chờ duyệt', 'warning'], 'Da phe duyet': ['Đã phê duyệt', 'success'], 'Yeu cau chinh sua': ['Yêu cầu sửa', 'danger'],
+  'Da trinh duyet': ['Chờ duyệt', 'warning'],
+  'Da phe duyet': ['Đã phê duyệt', 'success'],
+  'Đã phê duyệt': ['Đã phê duyệt', 'success'],
+  'Yeu cau chinh sua': ['Yêu cầu sửa', 'danger'],
 };
 
-export function Status({ value }: { value: string }) {
-  const [label, tone] = STATUS[value] ?? [value, 'muted'];
+export function Status(props: { value?: string; status?: string }) {
+  const raw = String(props.value ?? props.status ?? '').trim();
+  if (!raw) return <span className="badge badge-muted">—</span>;
+
+  let match = STATUS[raw];
+  if (!match) {
+    const lower = raw.toLowerCase();
+    for (const [key, val] of Object.entries(STATUS)) {
+      if (key.toLowerCase() === lower) {
+        match = val;
+        break;
+      }
+    }
+  }
+
+  const [label, tone] = match ?? [raw, 'muted'];
   return <span className={`badge badge-${tone}`}>{label}</span>;
 }
 

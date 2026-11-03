@@ -559,7 +559,7 @@ table.table {
 }
 
 /* ---------- Form Controls ---------- */
-.input, .select, .textarea {
+.input, .select {
   height: 36px;
   padding: 0 12px;
   border: 1px solid var(--border);
@@ -571,9 +571,19 @@ table.table {
   transition: all 0.15s ease;
 }
 
-.textarea {
-  height: auto;
-  padding: 8px 12px;
+.textarea, textarea.input, textarea {
+  height: auto !important;
+  min-height: 120px;
+  padding: 10px 14px !important;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #FFFFFF;
+  font-size: 13px;
+  color: var(--zinc-900);
+  outline: none;
+  line-height: 1.6 !important;
+  resize: vertical;
+  transition: all 0.15s ease;
 }
 
 .input:focus, .select:focus, .textarea:focus {
@@ -670,3 +680,8 @@ table.table {
   height: 100%;
   background: var(--zinc-800);
 }
+
+
+/* High-Density Table Thumbnail */
+.cell-flex { display: flex; align-items: center; gap: 12px; }
+.thumb, img.thumb { width: 56px !important; height: 56px !important; min-width: 56px !important; max-width: 56px !important; min-height: 56px !important; max-height: 56px !important; border-radius: 8px !important; object-fit: cover !important; background-color: var(--zinc-100); border: 1px solid var(--border); display: block !important; flex-shrink: 0 !important; }

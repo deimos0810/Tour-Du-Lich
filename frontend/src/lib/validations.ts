@@ -25,18 +25,18 @@ export const changePasswordSchema = z
   .refine((v) => v.newPassword === v.confirmPassword, { path: ['confirmPassword'], message: 'Mật khẩu xác nhận không khớp' })
   .refine((v) => v.oldPassword !== v.newPassword, { path: ['newPassword'], message: 'Mật khẩu mới phải khác mật khẩu cũ' });
 
-/** Form đặt tour: tối thiểu 1 người lớn, CCCD (nếu nhập) đúng 12 số. */
+/** Form đặt tour: bắt buộc đủ họ tên và CCCD cho từng hành khách, không được bỏ trống. */
 export const bookingSchema = z.object({
   soLuongNguoiLon: z.number().int().min(1, 'Cần ít nhất 1 người lớn'),
   soLuongTreEm: z.number().int().min(0, 'Số trẻ em không hợp lệ'),
   hanhKhach: z
     .array(
       z.object({
-        hoTen: z.string().trim().optional(),
-        cccd: cccd.optional().or(z.literal('')),
+        hoTen: z.string().trim().min(2, 'Vui lòng nhập đầy đủ họ và tên cho tất cả hành khách'),
+        cccd: z.string().trim().regex(/^\d{12}$/, 'CCCD/Mã định danh phải gồm đúng 12 chữ số'),
       }),
     )
-    .optional(),
+    .min(1, 'Danh sách hành khách không được để trống'),
 });
 
 /** Trả về thông báo lỗi đầu tiên (hoặc null nếu hợp lệ) để hiển thị trong form. */

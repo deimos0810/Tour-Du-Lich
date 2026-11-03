@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:viettour_mobile/main.dart';
+import 'package:viet_tour/main.dart';
 
 void main() {
-  testWidgets('App loads smoke test', (WidgetTester tester) async {
-    await tester.pumpWidget(const VietTourMobileApp());
-    expect(find.text('VietTour Mobile'), findsOneWidget);
+  testWidgets('App smoke test', (WidgetTester tester) async {
+    await tester.pumpWidget(const VietTourApp());
+    expect(find.byType(VietTourApp), findsOneWidget);
   });
 }

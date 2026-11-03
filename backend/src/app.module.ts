@@ -13,6 +13,12 @@ import { ZaloPayModule } from './modules/zalopay.module.js';
 import { PortalModule } from './modules/portal.module.js';
 import { ManagementModule } from './modules/management.module.js';
 import { ExportModule } from './modules/export.module.js';
+import { UploadModule } from './modules/upload.module.js';
+import { PromotionsModule } from './modules/promotions.module.js';
+import { NotificationsModule } from './modules/notifications.module.js';
+import { FinanceModule } from './modules/finance.module.js';
+import { SuppliersModule } from './modules/suppliers.module.js';
+import { ReportsModule } from './modules/reports.module.js';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor.js';
 import { JWT_EXPIRES_IN, JWT_SECRET } from './common/jwt.config.js';
 
@@ -31,6 +37,12 @@ import { JWT_EXPIRES_IN, JWT_SECRET } from './common/jwt.config.js';
     PortalModule,
     ManagementModule,
     ExportModule,
+    UploadModule,
+    PromotionsModule,
+    NotificationsModule,
+    FinanceModule,
+    SuppliersModule,
+    ReportsModule,
   ],
   providers: [{ provide: APP_INTERCEPTOR, useClass: AuditLogInterceptor }],
 })

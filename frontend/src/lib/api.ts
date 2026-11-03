@@ -1,6 +1,13 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 
+export function getApiUrl(): string {
+  if (typeof window !== 'undefined') {
+    return '/api-proxy';
+  }
+  return process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
+}
+
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
 
 function getToken(): string | null {
@@ -32,7 +39,7 @@ function handleUnauthorized() {
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${getApiUrl()}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...init?.headers },
     cache: 'no-store',
@@ -48,7 +55,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 /** Tải file (xlsx/pdf) từ API có yêu cầu JWT: gọi fetch kèm Bearer token rồi kích hoạt tải xuống. */
 export async function downloadFile(path: string, filename: string): Promise<void> {
-  const res = await fetch(`${API_URL}${path}`, { headers: authHeaders(), cache: 'no-store' });
+  const res = await fetch(`${getApiUrl()}${path}`, { headers: authHeaders(), cache: 'no-store' });
   if (!res.ok) {
     if (res.status === 401) handleUnauthorized();
     throw new Error(await errorMessage(res));
@@ -86,3 +93,39 @@ export function useApi<T>(path: string | null) {
   useEffect(() => { void load(); }, [load]);
   return { data, error, loading, reload: load };
 }
+
+/** Chuyển đổi URL ảnh thành URL đầy đủ nếu là ảnh lưu cục bộ trong project (/uploads/...) */
+export function getImageUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:')) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('/')) {
+    const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+    return `http://${host}:4000${trimmed}`;
+  }
+  return trimmed;
+}
+
+/** Tải lên ảnh Tour vào thư mục uploads/tours của project */
+export async function uploadTourImage(
+  file: File,
+): Promise<{ success: boolean; url: string; fullUrl: string; filename: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(`${getApiUrl()}/upload/tour-image`, {
+    method: 'POST',
+    headers: { ...authHeaders() },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) handleUnauthorized();
+    throw new Error(await errorMessage(res));
+  }
+
+  return res.json();
+}
+

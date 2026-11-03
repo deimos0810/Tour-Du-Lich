@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
+import { getApiUrl } from '@/lib/api';
 
 export default function CustomerFooter() {
   const [email, setEmail] = useState('');
@@ -17,7 +18,7 @@ export default function CustomerFooter() {
     try {
       setSubmitting(true);
       setMessage(null);
-      const res = await fetch('http://localhost:4000/api/portal/newsletter', {
+      const res = await fetch(`${getApiUrl()}/portal/newsletter`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -46,8 +47,8 @@ export default function CustomerFooter() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
               <div style={{
-                width: '36px', height: '36px', borderRadius: '8px', background: '#0284C7',
-                color: '#FFF', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '16px'
+                width: '36px', height: '36px', borderRadius: '8px', background: '#1E293B', border: '1px solid #334155',
+                color: '#FDE68A', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: '15px'
               }}>
                 VT
               </div>
@@ -57,7 +58,8 @@ export default function CustomerFooter() {
               Nền tảng đặt vé tour và dịch vụ lữ hành trọn gói cao cấp hàng đầu Việt Nam. Khám phá vẻ đẹp di sản văn hóa, nghỉ dưỡng và thiên nhiên với quy chuẩn 5 sao.
             </p>
             <div style={{ fontSize: '13px', lineHeight: 1.8 }}>
-              <div>Địa chỉ: Số 40, Đường số 13, KĐT Vạn Phúc, TP. Hồ Chí Minh</div>
+              <div>Quầy giao dịch: Ga Quốc Nội, Sân bay Quốc tế Tân Sơn Nhất, TP.HCM</div>
+              <div>Phòng vé Trung tâm: 190 Pasteur, Phường Võ Thị Sáu, Quận 3, TP.HCM</div>
               <div>Tổng đài đặt tour: <strong style={{ color: '#F8FAFC' }}>1900 1234</strong></div>
               <div>Email liên hệ: <strong style={{ color: '#F8FAFC' }}>cskh@viettour.vn</strong></div>
             </div>
@@ -108,7 +110,7 @@ export default function CustomerFooter() {
                   type="submit"
                   disabled={submitting}
                   className="btn btn-primary"
-                  style={{ padding: '8px 16px', fontSize: '13px', background: '#0284C7', borderColor: '#0284C7', fontWeight: 700, whiteSpace: 'nowrap' }}
+                  style={{ padding: '8px 16px', fontSize: '13px', background: '#D97706', borderColor: '#D97706', color: '#FFFFFF', fontWeight: 700, whiteSpace: 'nowrap' }}
                 >
                   {submitting ? 'Đang gửi...' : 'Đăng ký'}
                 </button>

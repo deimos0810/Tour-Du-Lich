@@ -7,6 +7,7 @@ import {
   BarChart3,
   Compass,
   Calendar,
+  CalendarDays,
   ClipboardList,
   Tag,
   Users,
@@ -30,7 +31,7 @@ export default function Sidebar() {
     if (primaryRole === 'Admin') return true;
 
     if (primaryRole === 'Dieu hanh') {
-      return ['/', '/tours', '/departures', '/guides', '/suppliers', '/customers', '/promotions', '/reports'].includes(href);
+      return ['/', '/tours', '/departures', '/guides', '/suppliers', '/customers', '/promotions', '/reports', '/my-schedule'].includes(href);
     }
 
     if (primaryRole === 'Ke toan') {
@@ -38,7 +39,7 @@ export default function Sidebar() {
     }
 
     if (primaryRole === 'HDV') {
-      return ['/departures', '/guides'].includes(href);
+      return ['/my-schedule', '/departures', '/guides'].includes(href);
     }
 
     if (primaryRole === 'Khach hang') {
@@ -49,6 +50,12 @@ export default function Sidebar() {
   };
 
   const NAV = [
+    {
+      title: 'HƯỚNG DẪN VIÊN',
+      items: [
+        { href: '/my-schedule', label: 'Lịch dẫn tour của tôi', icon: CalendarDays },
+      ],
+    },
     {
       title: 'TỔNG QUAN',
       items: [

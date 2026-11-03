@@ -4,10 +4,10 @@ import Link from 'next/link';
 import CustomerHeader from '@/components/customer/CustomerHeader';
 import CustomerFooter from '@/components/customer/CustomerFooter';
 import CustomerAccountLayout from '@/components/customer/CustomerAccountLayout';
-import { useApi, api, downloadFile } from '@/lib/api';
+import { useApi, api, downloadFile, getImageUrl, getApiUrl } from '@/lib/api';
 import { Status, vnd, date } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
-import { CreditCard, QrCode, X, Check, Plane, Star } from 'lucide-react';
+import { CreditCard, QrCode, X, Check, Plane, Star, AlertTriangle, ShieldCheck, Smartphone, Lock } from 'lucide-react';
 
 type Passenger = {
   ChiTietID: number;
@@ -20,6 +20,7 @@ type Passenger = {
 
 type Booking = {
   DonHangID: number;
+  KhachHangID?: number;
   MaDon: string;
   NgayDat: string;
   SoLuongNguoiLon: number;
@@ -30,6 +31,7 @@ type Booking = {
   TienConLai?: string;
   TrangThaiDon: string;
   PhuongThucTT?: string | null;
+  lanIp?: string | null;
   LichKhoiHanh: {
     MaLich: string;
     NgayKhoiHanh: string;
@@ -37,6 +39,13 @@ type Booking = {
     Tour: { TourID?: number; TenTour: string; HinhAnhURL: string | null; ThoiGian: string; MaTour?: string };
   };
   ChiTietHanhKhach?: Passenger[];
+  GhiChu?: string | null;
+  DanhGia?: Array<{
+    DanhGiaID: number;
+    SoSao: number;
+    BinhLuan: string | null;
+    NgayDanhGia: string;
+  }>;
 };
 
 export default function MyBookingsPage() {
@@ -48,6 +57,7 @@ export default function MyBookingsPage() {
   const [payModalBooking, setPayModalBooking] = useState<Booking | null>(null);
   const [payTab, setPayTab] = useState<'VNPAY' | 'ZALOPAY' | 'CASH_CARD'>('VNPAY');
   const [ticketModalBooking, setTicketModalBooking] = useState<Booking | null>(null);
+  const [selectedPassengerIdx, setSelectedPassengerIdx] = useState<number>(0);
   const [loadingPay, setLoadingPay] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
@@ -66,25 +76,41 @@ export default function MyBookingsPage() {
 
   const bookingsApi = useApi<Booking[]>(user ? `/portal/my-bookings?customerId=${user.customerId ?? 1}` : null);
   const bookings = bookingsApi.data ?? [];
+  const [vnpaySynced, setVnpaySynced] = useState(0);
 
-  // Tự động xử lý khi VNPay Sandbox phản hồi quay lại trang (vnp_ResponseCode)
+  // Tự động xử lý khi Cổng VNPAY phản hồi quay lại trang (vnp_ResponseCode)
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const urlParams = new URLSearchParams(window.location.search);
+    const rawSearch = window.location.search;
+    if (!rawSearch) return;
+    const urlParams = new URLSearchParams(rawSearch);
     const vnpRspCode = urlParams.get('vnp_ResponseCode');
 
     if (vnpRspCode) {
+      window.history.replaceState({}, document.title, window.location.pathname);
       if (vnpRspCode === '00') {
-        setToastMsg('Thanh toán qua Cổng VNPay Sandbox THÀNH CÔNG! Đơn hàng của bạn đã được cập nhật.');
-        api(`/vnpay/vnpay_ipn${window.location.search}`)
-          .then(() => bookingsApi.reload())
-          .catch(() => bookingsApi.reload());
+        setToastMsg('Thanh toán qua Cổng VNPAY THÀNH CÔNG! Trạng thái đơn đã chuyển sang "Đã thanh toán" & kích hoạt Vé điện tử QR.');
+        api(`/vnpay/vnpay_ipn${rawSearch}`)
+          .then(() => {
+            setVnpaySynced((c) => c + 1);
+            void bookingsApi.reload();
+          })
+          .catch(() => {
+            setVnpaySynced((c) => c + 1);
+            void bookingsApi.reload();
+          });
       } else {
         setToastMsg('Giao dịch thanh toán VNPay không thành công hoặc đã bị hủy.');
       }
-      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
+
+  // Đảm bảo sau khi VNPAY IPN hoàn tất và user từ AuthContext đã load xong thì danh sách đơn luôn tự làm mới
+  useEffect(() => {
+    if (vnpaySynced > 0 && user) {
+      void bookingsApi.reload();
+    }
+  }, [vnpaySynced, user]);
 
   const tabs = [
     { id: 'ALL', label: 'Tất cả' },
@@ -109,13 +135,17 @@ export default function MyBookingsPage() {
   const handlePayVNPayDirect = async (booking: Booking) => {
     setLoadingPay(true);
     try {
-      const amount = Number(booking.TienConLai || booking.TongTien);
+      const amount = Number(
+        booking.TienConLai ?? Math.max(0, Number(booking.TongTien) - Number(booking.GiamGia || 0) - Number(booking.TienCoc || 0)),
+      );
+      const returnUrl = typeof window !== 'undefined' ? `${window.location.origin}/portal/my-bookings` : undefined;
       const res = await api<{ paymentUrl: string }>('/vnpay/create-payment', {
         method: 'POST',
         body: JSON.stringify({
           donHangId: booking.DonHangID,
           amount,
           orderInfo: `Thanh toan don tour ${booking.MaDon} qua VNPay`,
+          returnUrl,
         }),
       });
       if (res.paymentUrl) {
@@ -123,6 +153,28 @@ export default function MyBookingsPage() {
       }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Không thể kết nối cổng VNPay Sandbox');
+    } finally {
+      setLoadingPay(false);
+    }
+  };
+
+  // Xác nhận đăng ký nộp tiền mặt tại quầy (chờ Admin xác nhận thu)
+  const handleConfirmCashAtCounter = async (booking: Booking) => {
+    setLoadingPay(true);
+    try {
+      await api(`/bookings/${booking.DonHangID}/request-cash`, {
+        method: 'POST',
+        body: JSON.stringify({
+          ghiChu: `Khách xác nhận nộp tiền mặt tại quầy giao dịch VietTour cho đơn ${booking.MaDon}`,
+        }),
+      });
+      setPayModalBooking(null);
+      setToastMsg(
+        `Đã đăng ký thanh toán tiền mặt tại quầy cho đơn ${booking.MaDon}! Khi thu ngân/Admin xác nhận đã thu, trạng thái sẽ chuyển sang "Đã thanh toán".`,
+      );
+      void bookingsApi.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Không thể ghi nhận yêu cầu thanh toán tại quầy');
     } finally {
       setLoadingPay(false);
     }
@@ -157,7 +209,8 @@ export default function MyBookingsPage() {
     setCancelReason('');
     setCancelPreview(null);
     try {
-      const data = await api<any>(`/portal/bookings/${booking.DonHangID}/cancel-preview`);
+      const cid = user?.customerId || (booking as any).KhachHangID;
+      const data = await api<any>(`/portal/bookings/${booking.DonHangID}/cancel-preview?customerId=${cid}`);
       setCancelPreview(data);
     } catch (e: any) {
       alert(e.message || 'Lỗi kiểm tra điều kiện hủy tour');
@@ -173,11 +226,12 @@ export default function MyBookingsPage() {
     }
     setLoadingCancel(true);
     try {
+      const cid = user?.customerId || (cancelModalBooking as any).KhachHangID;
       const res = await api<any>(`/portal/bookings/${cancelModalBooking.DonHangID}/cancel`, {
         method: 'POST',
-        body: JSON.stringify({ lyDoHuy: cancelReason.trim() }),
+        body: JSON.stringify({ customerId: cid, lyDoHuy: cancelReason.trim() }),
       });
-      setToastMsg(`Đã hủy đơn ${cancelModalBooking.MaDon} thành công. ${res.tienHoan > 0 ? `Tiền hoàn dự kiến: ${vnd(res.tienHoan)}.` : ''}`);
+      setToastMsg(`Đã hủy đơn ${cancelModalBooking.MaDon} thành công. ${res?.hoanTien > 0 ? `Tiền hoàn dự kiến: ${vnd(res.hoanTien)}.` : ''}`);
       setCancelModalBooking(null);
       bookingsApi.reload();
     } catch (err: any) {
@@ -197,9 +251,11 @@ export default function MyBookingsPage() {
     setLoadingReview(true);
     try {
       const tourId = (reviewModalBooking.LichKhoiHanh as any)?.Tour?.TourID || (reviewModalBooking.LichKhoiHanh as any)?.TourID || 1;
+      const cid = user?.customerId || (reviewModalBooking as any).KhachHangID;
       await api('/portal/reviews', {
         method: 'POST',
         body: JSON.stringify({
+          customerId: cid,
           donHangId: reviewModalBooking.DonHangID,
           tourId,
           soSao: reviewRating,
@@ -209,6 +265,7 @@ export default function MyBookingsPage() {
       setToastMsg(`Cảm ơn bạn đã gửi đánh giá cho chuyến đi ${reviewModalBooking.LichKhoiHanh?.Tour?.TenTour}!`);
       setReviewModalBooking(null);
       setReviewComment('');
+      bookingsApi.reload();
     } catch (err: any) {
       alert(err.message || 'Không thể gửi đánh giá');
     } finally {
@@ -233,7 +290,7 @@ export default function MyBookingsPage() {
     if (!payModalBooking?.MaDon) return;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`http://localhost:4000/api/bookings/ticket/${payModalBooking.MaDon}`);
+        const res = await fetch(`${getApiUrl()}/bookings/ticket/${payModalBooking.MaDon}`);
         if (res.ok) {
           const data = await res.json();
           if (data.TrangThaiDon === 'Da thanh toan') {
@@ -350,10 +407,28 @@ export default function MyBookingsPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {filteredBookings.map((b) => (
                 <div key={b.DonHangID} style={{ padding: '20px', border: '1px solid #E2E8F0', borderRadius: '12px', background: '#FFFFFF', transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid #F1F5F9' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid #F1F5F9', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                       <span className="code" style={{ fontSize: '14px', fontWeight: 800, color: '#005BAA' }}>Mã đơn: {b.MaDon}</span>
-                      <span style={{ fontSize: '12.5px', color: '#64748B' }}>• Ngày đặt: {date(b.NgayDat)}</span>
+                      <span style={{ fontSize: '12.5px', color: '#64748B' }}>
+                        • Đặt lúc: {new Date(b.NgayDat).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ngày {date(b.NgayDat)}
+                      </span>
+                      {b.TrangThaiDon === 'Cho thanh toan' &&
+                        (b.PhuongThucTT === 'Tien mat' || (b.GhiChu && b.GhiChu.includes('[ĐĂNG KÝ TIỀN MẶT TẠI QUẦY]'))) && (
+                          <span
+                            style={{
+                              fontSize: '11.5px',
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                              background: '#F1F5F9',
+                              color: '#0F172A',
+                              border: '1px solid #CBD5E1',
+                              fontWeight: 700,
+                            }}
+                          >
+                            Đã đăng ký nộp Tiền mặt tại quầy (Chờ Admin xác nhận thu)
+                          </span>
+                        )}
                     </div>
                     <Status value={b.TrangThaiDon} />
                   </div>
@@ -361,7 +436,7 @@ export default function MyBookingsPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr auto', gap: '20px', alignItems: 'center' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={b.LichKhoiHanh?.Tour?.HinhAnhURL || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500'}
+                      src={getImageUrl(b.LichKhoiHanh?.Tour?.HinhAnhURL) || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500'}
                       alt={b.LichKhoiHanh?.Tour?.TenTour}
                       style={{ width: '100px', height: '75px', objectFit: 'cover', borderRadius: '8px' }}
                     />
@@ -402,10 +477,13 @@ export default function MyBookingsPage() {
                         )}
 
                         {/* NÚT XEM VÉ QR CODE NẾU ĐÃ THANH TOÁN */}
-                        {(b.TrangThaiDon === 'Da thanh toan' || b.TrangThaiDon === 'Da dat coc') && (
+                        {b.TrangThaiDon === 'Da thanh toan' && (
                           <button
                             className="btn btn-sm"
-                            onClick={() => setTicketModalBooking(b)}
+                            onClick={() => {
+                              setSelectedPassengerIdx(0);
+                              setTicketModalBooking(b);
+                            }}
                             style={{ background: 'var(--emerald-600)', color: '#FFF', border: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px' }}
                           >
                             <QrCode size={13} strokeWidth={1.5} /> Vé điện tử QR
@@ -414,17 +492,27 @@ export default function MyBookingsPage() {
 
                         {/* NÚT ĐÁNH GIÁ TOUR */}
                         {(b.TrangThaiDon === 'Da thanh toan' || b.TrangThaiDon === 'Hoan thanh') && (
-                          <button
-                            className="btn btn-sm"
-                            onClick={() => {
-                              setReviewModalBooking(b);
-                              setReviewRating(5);
-                              setReviewComment('');
-                            }}
-                            style={{ background: 'var(--zinc-100)', color: '#B45309', border: '1px solid var(--border)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12.5px' }}
-                          >
-                            <Star size={13} strokeWidth={1.5} fill="#B45309" color="#B45309" /> Đánh giá
-                          </button>
+                          b.DanhGia && b.DanhGia.length > 0 ? (
+                            <span
+                              className="badge"
+                              style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', padding: '5px 10px' }}
+                              title={b.DanhGia[0].BinhLuan || 'Đã đánh giá'}
+                            >
+                              <Star size={12} fill="#92400E" color="#92400E" /> Đã đánh giá ({b.DanhGia[0].SoSao}★)
+                            </span>
+                          ) : (
+                            <button
+                              className="btn btn-sm"
+                              onClick={() => {
+                                setReviewModalBooking(b);
+                                setReviewRating(5);
+                                setReviewComment('');
+                              }}
+                              style={{ background: 'var(--zinc-100)', color: '#B45309', border: '1px solid var(--border)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12.5px' }}
+                            >
+                              <Star size={13} strokeWidth={1.5} fill="#B45309" color="#B45309" /> Đánh giá
+                            </button>
+                          )
                         )}
 
                         {/* NÚT HỦY TOUR */}
@@ -440,6 +528,53 @@ export default function MyBookingsPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* KHUNG HIỂN THỊ LÝ DO HỦY ĐƠN */}
+                  {b.TrangThaiDon === 'Da huy' && (
+                    <div
+                      style={{
+                        marginTop: '14px',
+                        padding: '12px 14px',
+                        background: '#fff1f2',
+                        border: '1.5px solid #fecdd3',
+                        borderRadius: '10px',
+                        fontSize: '12.5px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#9f1239', fontWeight: 700 }}>
+                        <AlertTriangle size={15} color="#e11d48" />
+                        <span>Thông tin hủy đơn đặt tour</span>
+                      </div>
+                      <div style={{ marginTop: '6px', color: '#881337', lineHeight: 1.45 }}>
+                        <span style={{ fontWeight: 700 }}>Lý do hủy: </span>
+                        {b.GhiChu ? (
+                          b.GhiChu.includes('[QUẢN TRỊ VIÊN HỦY]') ? (
+                            <span>
+                              {b.GhiChu.split('Lý do:')[1]?.trim() || b.GhiChu}
+                              <span
+                                style={{
+                                  display: 'inline-block',
+                                  marginLeft: '6px',
+                                  background: '#ffe4e6',
+                                  color: '#be123c',
+                                  padding: '1px 8px',
+                                  borderRadius: '12px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                Hủy bởi Quản trị viên
+                              </span>
+                            </span>
+                          ) : (
+                            b.GhiChu
+                          )
+                        ) : (
+                          'Đơn đặt tour đã được hủy theo quy định.'
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -474,61 +609,68 @@ export default function MyBookingsPage() {
               </div>
             </div>
 
-            {/* TAB CHUYỂN ĐỔI: VNPAY vs ZALOPAY vs TIỀN MẶT/THẺ */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '16px', background: '#F1F5F9', padding: '4px', borderRadius: '10px' }}>
+            {/* TAB CHUYỂN ĐỔI: VNPAY vs TIỀN MẶT TẠI QUẦY */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '16px', background: '#F1F5F9', padding: '4px', borderRadius: '10px' }}>
               <button
                 onClick={() => setPayTab('VNPAY')}
                 style={{
-                  padding: '9px 6px',
+                  padding: '9px 8px',
                   border: 'none',
                   borderRadius: '6px',
-                  background: payTab === 'VNPAY' ? '#0284C7' : 'transparent',
+                  background: payTab === 'VNPAY' ? '#0F172A' : 'transparent',
                   color: payTab === 'VNPAY' ? '#FFFFFF' : '#475569',
                   fontWeight: 700,
-                  fontSize: '12px',
+                  fontSize: '12.5px',
                   cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}
               >
-                VNPay Sandbox
-              </button>
-              <button
-                onClick={() => setPayTab('ZALOPAY')}
-                style={{
-                  padding: '9px 6px',
-                  border: 'none',
-                  borderRadius: '6px',
-                  background: payTab === 'ZALOPAY' ? '#0068FF' : 'transparent',
-                  color: payTab === 'ZALOPAY' ? '#FFFFFF' : '#475569',
-                  fontWeight: 700,
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                }}
-              >
-                Ví ZaloPay
+                Cổng VNPAY (QR / ATM / Thẻ)
               </button>
               <button
                 onClick={() => setPayTab('CASH_CARD')}
                 style={{
-                  padding: '9px 6px',
+                  padding: '9px 8px',
                   border: 'none',
                   borderRadius: '6px',
-                  background: payTab === 'CASH_CARD' ? '#0284C7' : 'transparent',
+                  background: payTab === 'CASH_CARD' ? '#0F172A' : 'transparent',
                   color: payTab === 'CASH_CARD' ? '#FFFFFF' : '#475569',
                   fontWeight: 700,
-                  fontSize: '12px',
+                  fontSize: '12.5px',
                   cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}
               >
-                Tại quầy
+                Thanh toán tại quầy
               </button>
             </div>
 
-            {/* TAB 1: CỔNG VNPAY SANDBOX */}
+            {/* TAB 1: CỔNG VNPAY */}
             {payTab === 'VNPAY' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  padding: '12px 14px',
+                  background: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '10px',
+                  fontSize: '12.5px',
+                  color: '#475569',
+                  lineHeight: 1.5,
+                }}>
+                  <ShieldCheck size={20} color="#0F172A" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '2px' }}>
+                      Cổng thanh toán trực tuyến VNPAY
+                    </div>
+                    <div>
+                      Hỗ trợ ứng dụng Ngân hàng quét VNPAY-QR, Thẻ ATM nội địa (Napas) và Thẻ quốc tế (Visa, Master, JCB). Vé điện tử &amp; Mã QR lên đoàn sẽ được kích hoạt ngay sau khi thanh toán thành công.
+                    </div>
+                  </div>
+                </div>
+
                 <button
                   onClick={() => handlePayVNPayDirect(payModalBooking)}
                   disabled={loadingPay}
@@ -536,112 +678,77 @@ export default function MyBookingsPage() {
                   style={{
                     width: '100%',
                     padding: '13px',
-                    background: '#0284C7',
-                    borderColor: '#0284C7',
+                    background: '#0F172A',
+                    borderColor: '#0F172A',
                     fontWeight: 700,
                     fontSize: '14px',
                     borderRadius: '8px',
                     cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
                   }}
                 >
-                  {loadingPay ? 'Đang kết nối cổng VNPay...' : 'Thanh toán ngay qua Cổng VNPay Sandbox →'}
-                </button>
-
-                <div style={{
-                  background: '#FEF3C7',
-                  border: '1px solid #FCD34D',
-                  borderRadius: '10px',
-                  padding: '12px 14px',
-                  fontSize: '12px',
-                  color: '#78350F',
-                  lineHeight: 1.5,
-                }}>
-                  <div style={{ fontWeight: 800, marginBottom: '4px' }}>Lưu ý kiểm thử cổng VNPay Sandbox:</div>
-                  <div style={{ marginBottom: '6px' }}>
-                    • Không quét mã QR bằng App Ngân Hàng thật bên ngoài (sẽ báo <em>&quot;Nhà cung cấp không khả dụng&quot;</em> do đây là môi trường thử nghiệm).
-                  </div>
-                  <div>
-                    • Trên giao diện VNPay, chọn mục <strong>&quot;Thẻ nội địa &amp; tài khoản ngân hàng&quot;</strong> → Chọn <strong>NCB</strong> → Nhập thẻ thử nghiệm:
-                    <div style={{ background: '#FFFBEB', padding: '6px 8px', borderRadius: '6px', marginTop: '4px', border: '1px solid #FDE68A' }}>
-                      Số thẻ: <strong>9704198526191432198</strong><br />
-                      Tên chủ thẻ: <strong>NGUYEN VAN A</strong> | Ngày PH: <strong>07/15</strong><br />
-                      Mã OTP: <strong>123456</strong>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: VÍ ZALOPAY SANDBOX */}
-            {payTab === 'ZALOPAY' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{
-                  background: '#EFF6FF',
-                  border: '1px solid #BFDBFE',
-                  borderRadius: '10px',
-                  padding: '12px 14px',
-                  fontSize: '12.5px',
-                  color: '#1E40AF',
-                  lineHeight: 1.5,
-                }}>
-                  <div style={{ fontWeight: 800, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ background: '#0068FF', color: '#FFF', borderRadius: '4px', padding: '1px 6px', fontSize: '11px', fontWeight: 900 }}>ZaloPay</span>
-                    Cổng Ví Điện Tử ZaloPay Sandbox
-                  </div>
-                  <div>Thanh toán tức thì bằng App ZaloPay / Ví điện tử hoặc chuyển khoản Napas 24/7. Tự động xác thực giao dịch sau khi hoàn tất.</div>
-                </div>
-
-                <button
-                  onClick={() => handlePayZaloPayDirect(payModalBooking)}
-                  disabled={loadingPay}
-                  className="btn btn-primary"
-                  style={{
-                    width: '100%',
-                    padding: '13px',
-                    background: '#0068FF',
-                    borderColor: '#0068FF',
-                    fontWeight: 700,
-                    fontSize: '14px',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {loadingPay ? 'Đang kết nối cổng ZaloPay...' : 'Thanh toán ngay qua Ví ZaloPay Sandbox →'}
+                  <Lock size={15} />
+                  {loadingPay ? 'Đang kết nối cổng VNPay...' : 'Thanh toán qua VNPAY →'}
                 </button>
               </div>
             )}
 
-            {/* TAB 3: TIỀN MẶT / THẺ TẠI QUẦY (GIỮ CHỖ) */}
+            {/* TAB 2: TIỀN MẶT / THẺ TẠI QUẦY (GIỮ CHỖ) */}
             {payTab === 'CASH_CARD' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div style={{
-                  background: '#F0FDF4',
-                  border: '1px solid #BBF7D0',
-                  borderRadius: '12px',
-                  padding: '16px',
-                  fontSize: '13px',
-                  color: '#166534',
+                  background: '#F8FAFC',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '10px',
+                  padding: '14px 16px',
+                  fontSize: '12.5px',
+                  color: '#334155',
                 }}>
-                  <div style={{ fontWeight: 800, fontSize: '14px', marginBottom: '6px', color: '#15803D' }}>
-                    Đã ghi nhận yêu cầu giữ chỗ (Thời hạn 24 giờ)
+                  <div style={{ fontWeight: 700, fontSize: '13.5px', marginBottom: '6px', color: '#0F172A' }}>
+                    Hướng dẫn thanh toán trực tiếp tại quầy (Hiệu lực giữ chỗ 24 giờ)
                   </div>
-                  <p style={{ margin: '0 0 10px', lineHeight: 1.5 }}>
-                    Chuyến đi của Quý khách tiếp tục được bảo lưu trên hệ thống. Quý khách vui lòng đến trực tiếp văn phòng hoặc liên hệ tổng đài để hoàn tất thanh toán trước khi thời hạn kết thúc.
+                  <p style={{ margin: '0 0 10px', lineHeight: 1.55, color: '#475569' }}>
+                    Đơn đặt chỗ của Quý khách đang ở trạng thái <strong>Chờ thanh toán</strong> (chưa phát hành vé điện tử). Quý khách vui lòng cung cấp mã đơn <strong>{payModalBooking.MaDon}</strong> tại một trong các điểm giao dịch dưới đây để nộp tiền và nhận vé:
                   </p>
-                  <div style={{ background: '#FFFFFF', padding: '10px 12px', borderRadius: '8px', border: '1px solid #DCFCE7', fontSize: '12.5px', color: '#1E293B', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div>Văn phòng VietTour: <strong>Số 40, Đường số 13, KĐT Vạn Phúc, TP. Hồ Chí Minh</strong></div>
-                    <div>Hình thức hỗ trợ: <strong>Tiền mặt hoặc Quẹt thẻ POS (ATM / Visa / Mastercard)</strong></div>
-                    <div>Hotline hỗ trợ 24/7: <strong style={{ color: '#0284C7' }}>1900 1234</strong></div>
+                  <div style={{ background: '#FFFFFF', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12.5px', color: '#1E293B', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                    <div>• Quầy giao dịch Sân bay: <strong>Quầy VietTour — Sảnh Đi Ga Quốc Nội, Sân bay Quốc tế Tân Sơn Nhất (45 Trường Sơn, Q. Tân Bình, TP.HCM)</strong></div>
+                    <div>• Đại lý Phòng vé Trung tâm: <strong>190 Pasteur, Phường Võ Thị Sáu, Quận 3, TP.HCM</strong></div>
+                    <div>• Phương thức chấp nhận: <strong>Tiền mặt (VNĐ) hoặc Quẹt thẻ POS (Napas / Visa / Mastercard)</strong></div>
+                    <div>• Tổng đài hỗ trợ: <strong style={{ color: '#0F172A' }}>1900 1234 (07:00 – 22:00)</strong></div>
                   </div>
                 </div>
 
-                <button
-                  onClick={() => setPayModalBooking(null)}
-                  className="btn btn-primary"
-                  style={{ width: '100%', background: '#0F172A', borderColor: '#0F172A', fontWeight: 700, fontSize: '13px', padding: '11px', borderRadius: '8px' }}
-                >
-                  Đã hiểu &amp; Đóng cửa sổ
-                </button>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setPayModalBooking(null)}
+                    className="btn btn-outline"
+                    style={{ flex: 1, fontWeight: 600, fontSize: '13px', padding: '11px', borderRadius: '8px' }}
+                  >
+                    Đóng
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loadingPay}
+                    onClick={() => handleConfirmCashAtCounter(payModalBooking)}
+                    className="btn btn-primary"
+                    style={{
+                      flex: 2,
+                      background: '#0F172A',
+                      borderColor: '#0F172A',
+                      fontWeight: 700,
+                      fontSize: '13px',
+                      padding: '11px',
+                      borderRadius: '8px',
+                      cursor: loadingPay ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {loadingPay ? 'Đang ghi nhận...' : 'Xác nhận thanh toán tiền mặt tại quầy'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -649,64 +756,120 @@ export default function MyBookingsPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* 2. MODAL VÉ ĐIỆN TỬ MÃ QR CODE (E-TICKET BOARDING PASS) */}
+      {/* 2. MODAL VÉ ĐIỆN TỬ MÃ QR CÁ NHÂN (MỖI KHÁCH CHỈ XEM ĐƯỢC QR CỦA CHÍNH MÌNH) */}
       {/* ========================================================================= */}
-      {ticketModalBooking && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div style={{ maxWidth: '480px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)', padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', margin: 0 }}>Vé Điện Tử & Thẻ Đoàn</h3>
-                <span style={{ fontSize: '12px', color: 'var(--emerald-600)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Check size={12} strokeWidth={2} /> VÉ HỢP LỆ — ĐÃ THANH TOÁN
-                </span>
-              </div>
-              <button className="btn btn-outline btn-sm" onClick={() => setTicketModalBooking(null)} style={{ padding: '4px 8px' }}>
-                <X size={14} strokeWidth={1.5} />
-              </button>
-            </div>
+      {ticketModalBooking && (() => {
+        const passengers = ticketModalBooking.ChiTietHanhKhach ?? [];
+        const norm = (s?: string | null) => (s || '').trim().toLowerCase();
+        const userNorm = norm(user?.name);
+        const myIdx = passengers.findIndex(
+          (p) => userNorm && (norm(p.HoTen) === userNorm || norm(p.HoTen).includes(userNorm) || userNorm.includes(norm(p.HoTen))),
+        );
+        const resolvedIdx = myIdx >= 0 ? myIdx : 0;
+        const currentPassenger = passengers[resolvedIdx] ?? null;
 
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-              {/* MÃ QR VÉ ĐIỆN TỬ */}
-              <div style={{ background: '#FFFFFF', padding: '12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(`${originUrl}/portal/ticket/${ticketModalBooking.MaDon}`)}`}
-                  alt="Vé điện tử QR Code VietTour"
-                  style={{ width: '200px', height: '200px', display: 'block' }}
-                />
+        const baseHost = (() => {
+          if (typeof window !== 'undefined') {
+            const u = new URL(window.location.origin);
+            if ((u.hostname === 'localhost' || u.hostname === '127.0.0.1') && ticketModalBooking.lanIp) {
+              u.hostname = ticketModalBooking.lanIp;
+            }
+            return u.origin;
+          }
+          return originUrl;
+        })();
+        const qrTargetUrl = currentPassenger
+          ? `${baseHost}/portal/ticket/${ticketModalBooking.MaDon}?khach=${currentPassenger.ChiTietID}`
+          : `${baseHost}/portal/ticket/${ticketModalBooking.MaDon}`;
+
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+            <div style={{ maxWidth: '480px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)', padding: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', margin: 0 }}>Vé Điện Tử Cá Nhân &amp; Mã QR</h3>
+                  <span style={{ fontSize: '12px', color: 'var(--emerald-600)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Check size={12} strokeWidth={2} /> VÉ HỢP LỆ — ĐÃ THANH TOÁN
+                  </span>
+                </div>
+                <button className="btn btn-outline btn-sm" onClick={() => setTicketModalBooking(null)} style={{ padding: '4px 8px' }}>
+                  <X size={14} strokeWidth={1.5} />
+                </button>
               </div>
 
-              <div style={{ fontSize: '12.5px', color: 'var(--zinc-600)', textAlign: 'center', background: 'var(--zinc-50)', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-                Dùng Camera điện thoại quét mã QR để mở trang xác thực vé điện tử và điểm danh lên xe / máy bay.
-              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+                {/* MÃ QR VÉ ĐIỆN TỬ RIÊNG CỦA CHỦ TÀI KHOẢN */}
+                <div style={{ background: '#FFFFFF', padding: '12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=4&data=${encodeURIComponent(qrTargetUrl)}`}
+                    alt="Vé điện tử QR Code VietTour"
+                    style={{ width: '190px', height: '190px', display: 'block' }}
+                  />
+                </div>
 
-              <div style={{ width: '100%', background: 'var(--zinc-50)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontSize: '12.5px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div>Tour: <strong>{ticketModalBooking.LichKhoiHanh?.Tour?.TenTour}</strong></div>
-                <div>Khởi hành: <strong>{new Date(ticketModalBooking.LichKhoiHanh?.NgayKhoiHanh).toLocaleDateString('vi-VN')}</strong></div>
-                <div>Mã vé: <code style={{ color: 'var(--zinc-900)', fontWeight: 700 }}>{ticketModalBooking.MaDon}</code></div>
-                <div>Số lượng: <strong>{ticketModalBooking.SoLuongNguoiLon} người lớn{ticketModalBooking.SoLuongTreEm > 0 ? `, ${ticketModalBooking.SoLuongTreEm} trẻ em` : ''}</strong></div>
-              </div>
+                {currentPassenger && (
+                  <div style={{ width: '100%', background: '#F8FAFC', padding: '10px 14px', borderRadius: '8px', border: '1px solid #0F172A', fontSize: '12.5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: '#0F172A' }}>
+                        Vé của bạn: {currentPassenger.HoTen} ({currentPassenger.LoaiKhach === 'Nguoi lon' ? 'Người lớn' : 'Trẻ em'})
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                        Mã vé: <code style={{ color: '#0F172A', fontWeight: 700 }}>{currentPassenger.MaQRVe || `VT-${ticketModalBooking.MaDon}-${resolvedIdx + 1}`}</code>
+                        {currentPassenger.CCCD ? ` • CCCD: ${currentPassenger.CCCD}` : ''}
+                      </div>
+                    </div>
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      background: currentPassenger.TrangThaiDiemDanh === 1 ? '#F0FDF4' : '#F1F5F9',
+                      color: currentPassenger.TrangThaiDiemDanh === 1 ? '#15803D' : '#475569',
+                      border: `1px solid ${currentPassenger.TrangThaiDiemDanh === 1 ? '#BBF7D0' : '#CBD5E1'}`,
+                    }}>
+                      {currentPassenger.TrangThaiDiemDanh === 1 ? '✓ Đã điểm danh' : 'Chưa điểm danh'}
+                    </span>
+                  </div>
+                )}
 
-              {/* NÚT MỞ VÉ TOÀN MÀN HÌNH */}
-              <Link
-                href={`/portal/ticket/${ticketModalBooking.MaDon}`}
-                className="btn btn-primary"
-                style={{ width: '100%', padding: '10px', background: 'var(--zinc-900)', borderColor: 'var(--zinc-900)', fontSize: '13.5px', fontWeight: 600, textAlign: 'center', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-              >
-                <Plane size={14} strokeWidth={1.5} /> Xem & In Thẻ Boarding Pass
-              </Link>
-              <button
-                className="btn btn-outline"
-                style={{ width: '100%', padding: '12px', marginTop: '10px', fontSize: '14px', fontWeight: 800, color: '#C8102E', borderColor: '#C8102E' }}
-                onClick={() => downloadFile(`/export/ticket/pdf/${ticketModalBooking.MaDon}`, `ve-dien-tu-${ticketModalBooking.MaDon}.pdf`).catch((e) => alert(e instanceof Error ? e.message : 'Không thể tải vé PDF'))}
-              >
-                Tải Vé PDF (Boarding Pass)
-              </button>
+                {passengers.length > 1 && (
+                  <div style={{ width: '100%', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', color: '#475569' }}>
+                    <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <Lock size={13} /> Bảo mật chống điểm danh hộ ({passengers.length} khách trong đơn):
+                    </div>
+                    <div>
+                      Mỗi tài khoản chỉ được phép hiển thị <strong>Mã QR cá nhân của chính mình</strong> ({currentPassenger?.HoTen}). Mã QR của {passengers.length - 1} hành khách đi cùng đã được ẩn để tránh điểm danh hộ.
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ width: '100%', background: 'var(--zinc-50)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontSize: '12.5px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <div>Tour: <strong>{ticketModalBooking.LichKhoiHanh?.Tour?.TenTour}</strong></div>
+                  <div>Khởi hành: <strong>{new Date(ticketModalBooking.LichKhoiHanh?.NgayKhoiHanh).toLocaleDateString('vi-VN')}</strong></div>
+                  <div>Mã đơn: <code style={{ color: 'var(--zinc-900)', fontWeight: 700 }}>{ticketModalBooking.MaDon}</code> • Tổng đoàn: <strong>{ticketModalBooking.SoLuongNguoiLon} người lớn{ticketModalBooking.SoLuongTreEm > 0 ? `, ${ticketModalBooking.SoLuongTreEm} trẻ em` : ''}</strong></div>
+                </div>
+
+                {/* NÚT MỞ VÉ TOÀN MÀN HÌNH */}
+                <Link
+                  href={currentPassenger ? `/portal/ticket/${ticketModalBooking.MaDon}?khach=${currentPassenger.ChiTietID}` : `/portal/ticket/${ticketModalBooking.MaDon}`}
+                  className="btn btn-primary"
+                  style={{ width: '100%', padding: '10px', background: 'var(--zinc-900)', borderColor: 'var(--zinc-900)', fontSize: '13.5px', fontWeight: 600, textAlign: 'center', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                >
+                  <Plane size={14} strokeWidth={1.5} /> Xem &amp; In Thẻ Boarding Pass Chi Tiết
+                </Link>
+                <button
+                  className="btn btn-outline"
+                  style={{ width: '100%', padding: '11px', fontSize: '13.5px', fontWeight: 700, color: '#0F172A', borderColor: '#CBD5E1' }}
+                  onClick={() => downloadFile(`/export/ticket/pdf/${ticketModalBooking.MaDon}`, `ve-dien-tu-${ticketModalBooking.MaDon}.pdf`).catch((e) => alert(e instanceof Error ? e.message : 'Không thể tải vé PDF'))}
+                >
+                  Tải Vé PDF (Boarding Pass)
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* MODAL CHI TIẾT ĐƠN HÀNG */}
       {selectedBooking && (
@@ -728,6 +891,18 @@ export default function MyBookingsPage() {
                 <span>Trạng thái:</span>
                 <Status value={selectedBooking.TrangThaiDon} />
               </div>
+              {selectedBooking.TrangThaiDon === 'Da huy' && (
+                <div style={{ marginTop: '10px', padding: '12px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', color: '#9f1239' }}>
+                  <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                    <AlertTriangle size={14} color="#e11d48" /> Lý do hủy đơn:
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#881337', lineHeight: 1.45 }}>
+                    {selectedBooking.GhiChu?.includes('[QUẢN TRỊ VIÊN HỦY]')
+                      ? selectedBooking.GhiChu.split('Lý do:')[1]?.trim() || selectedBooking.GhiChu
+                      : selectedBooking.GhiChu || 'Đơn đã bị hủy theo quy định'}
+                  </div>
+                </div>
+              )}
             </div>
             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
               <button className="btn btn-outline btn-sm" onClick={() => setSelectedBooking(null)}>Đóng</button>
@@ -745,19 +920,29 @@ export default function MyBookingsPage() {
                 </button>
               )}
               {(selectedBooking.TrangThaiDon === 'Da thanh toan' || selectedBooking.TrangThaiDon === 'Hoan thanh') && (
-                <button
-                  className="btn btn-sm"
-                  onClick={() => {
-                    const b = selectedBooking;
-                    setSelectedBooking(null);
-                    setReviewModalBooking(b);
-                    setReviewRating(5);
-                    setReviewComment('');
-                  }}
-                  style={{ background: 'var(--zinc-100)', color: '#B45309', border: '1px solid var(--border)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                >
-                  <Star size={13} strokeWidth={1.5} fill="#B45309" color="#B45309" /> Đánh giá
-                </button>
+                selectedBooking.DanhGia && selectedBooking.DanhGia.length > 0 ? (
+                  <span
+                    className="badge"
+                    style={{ background: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 12px', fontSize: '12.5px' }}
+                    title={selectedBooking.DanhGia[0].BinhLuan || 'Đã đánh giá'}
+                  >
+                    <Star size={13} fill="#92400E" color="#92400E" /> Đã đánh giá ({selectedBooking.DanhGia[0].SoSao}★)
+                  </span>
+                ) : (
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => {
+                      const b = selectedBooking;
+                      setSelectedBooking(null);
+                      setReviewModalBooking(b);
+                      setReviewRating(5);
+                      setReviewComment('');
+                    }}
+                    style={{ background: 'var(--zinc-100)', color: '#B45309', border: '1px solid var(--border)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <Star size={13} strokeWidth={1.5} fill="#B45309" color="#B45309" /> Đánh giá
+                  </button>
+                )
               )}
               {(selectedBooking.TrangThaiDon === 'Da thanh toan' || selectedBooking.TrangThaiDon === 'Da dat coc') && (
                 <Link href={`/portal/ticket/${selectedBooking.MaDon}`} className="btn btn-primary btn-sm" style={{ background: 'var(--zinc-900)', borderColor: 'var(--zinc-900)', textDecoration: 'none', fontWeight: 600 }}>

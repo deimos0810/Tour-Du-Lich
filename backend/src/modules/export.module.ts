@@ -87,105 +87,173 @@ export class ExportService {
     const s = await this.loadSettlement(id);
     const lich = s.LichKhoiHanh;
     const wb = new ExcelJS.Workbook();
-    wb.creator = 'VietTour System';
+    wb.creator = 'VietTour Enterprise Travel System';
+    wb.lastModifiedBy = 'VietTour Accounting';
     wb.created = new Date();
+    wb.modified = new Date();
 
-    const ws = wb.addWorksheet('Quyet toan', { views: [{ showGridLines: false }] });
-    ws.columns = [{ width: 8 }, { width: 38 }, { width: 28 }, { width: 22 }, { width: 22 }, { width: 22 }];
+    const ws = wb.addWorksheet('Quyet toan', { views: [{ showGridLines: true }] });
+    // Căn chỉnh độ rộng cột chuẩn mực tránh hiện tượng ### hoặc tràn ô
+    ws.columns = [{ width: 8 }, { width: 42 }, { width: 26 }, { width: 18 }, { width: 22 }, { width: 26 }];
 
+    // Dòng 1: Tên doanh nghiệp
     ws.mergeCells('A1:F1');
-    ws.getCell('A1').value = 'CÔNG TY LỮ HÀNH VIETTOUR';
-    ws.getCell('A1').font = { name: 'Arial', bold: true, size: 16, color: { argb: 'FFC8102E' } };
+    const cA1 = ws.getCell('A1');
+    cA1.value = 'CÔNG TY TNHH DU LỊCH & LỮ HÀNH VIETTOUR';
+    cA1.font = { name: 'Arial', bold: true, size: 14, color: { argb: 'FFC8102E' } };
+    cA1.alignment = { vertical: 'middle', horizontal: 'left' };
+
+    // Dòng 2: Tiêu đề biểu mẫu
     ws.mergeCells('A2:F2');
-    ws.getCell('A2').value = 'BẢNG QUYẾT TOÁN TOUR DU LỊCH';
-    ws.getCell('A2').font = { name: 'Arial', bold: true, size: 14 };
-    ws.getCell('A2').alignment = { horizontal: 'center' };
+    const cA2 = ws.getCell('A2');
+    cA2.value = 'BẢNG QUYẾT TOÁN TÀI CHÍNH TOUR DU LỊCH';
+    cA2.font = { name: 'Arial', bold: true, size: 15, color: { argb: 'FF0F172A' } };
+    cA2.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Dòng 3: Thông tin chuyến tour
     ws.mergeCells('A3:F3');
-    ws.getCell('A3').value = `${lich.Tour.TenTour} — Mã lịch ${lich.MaLich} — ${fmtDate(lich.NgayKhoiHanh)} đến ${fmtDate(lich.NgayKetThuc)}`;
-    ws.getCell('A3').alignment = { horizontal: 'center' };
+    const cA3 = ws.getCell('A3');
+    cA3.value = `Chuyến đi: ${lich.Tour.TenTour}  |  Mã lịch: ${lich.MaLich}  |  Thời gian: ${fmtDate(lich.NgayKhoiHanh)} - ${fmtDate(lich.NgayKetThuc)}`;
+    cA3.font = { name: 'Arial', italic: true, size: 10.5, color: { argb: 'FF334155' } };
+    cA3.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Dòng 4: Người lập & ngày lập
     ws.mergeCells('A4:F4');
-    ws.getCell('A4').value = `Người lập: ${s.NhanVienLap.HoTen} — Ngày lập: ${fmtDate(s.NgayLap)} — Trạng thái: ${s.TrangThaiDuyet}`;
-    ws.getCell('A4').alignment = { horizontal: 'center' };
+    const cA4 = ws.getCell('A4');
+    cA4.value = `Người lập: ${s.NhanVienLap.HoTen}  |  Ngày lập biểu: ${fmtDate(s.NgayLap)}  |  Trạng thái: ${s.TrangThaiDuyet}`;
+    cA4.font = { name: 'Arial', italic: true, size: 10.5, color: { argb: 'FF475569' } };
+    cA4.alignment = { vertical: 'middle', horizontal: 'center' };
 
     const headFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
     const border: Partial<ExcelJS.Borders> = {
-      top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' },
+      top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
     };
+
     const writeHeader = (rowNo: number, labels: string[]) => {
       const row = ws.getRow(rowNo);
+      row.height = 24;
       labels.forEach((l, i) => {
         const c = row.getCell(i + 1);
         c.value = l;
-        c.font = { name: 'Arial', bold: true, color: { argb: 'FFFFFFFF' } };
+        c.font = { name: 'Arial', bold: true, size: 10.5, color: { argb: 'FFFFFFFF' } };
         c.fill = headFill;
         c.alignment = { horizontal: 'center', vertical: 'middle' };
         c.border = border;
       });
     };
 
-    // I. Doanh thu
+    // I. DOANH THU TỪ BOOKING
     let r = 6;
-    ws.getCell(`A${r}`).value = 'I. DOANH THU TỪ BOOKING';
-    ws.getCell(`A${r}`).font = { name: 'Arial', bold: true };
+    const cSec1 = ws.getCell(`A${r}`);
+    cSec1.value = 'I. DOANH THU BÁN VÉ / BOOKING KHÁCH HÀNG';
+    cSec1.font = { name: 'Arial', bold: true, size: 11.5, color: { argb: 'FF0F172A' } };
     r++;
-    writeHeader(r, ['STT', 'Khách hàng', 'Mã đơn', 'Số khách', 'Giảm giá', 'Thành tiền']);
+    writeHeader(r, ['STT', 'Họ tên khách hàng', 'Mã đơn đặt', 'Số lượng khách', 'Giảm giá (Voucher)', 'Doanh thu thực thu']);
     lich.DonDatTour.forEach((d, i) => {
       r++;
       const row = ws.getRow(r);
-      row.values = [i + 1, d.KhachHang.HoTen, d.MaDon, d.SoLuongNguoiLon + d.SoLuongTreEm, num(d.GiamGia), num(d.TongTien) - num(d.GiamGia)];
+      row.height = 20;
+      row.values = [
+        i + 1,
+        d.KhachHang?.HoTen || 'Khách vãng lai',
+        d.MaDon,
+        d.SoLuongNguoiLon + d.SoLuongTreEm,
+        num(d.GiamGia),
+        num(d.TongTien) - num(d.GiamGia),
+      ];
+      row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+      row.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' };
+      row.getCell(3).alignment = { horizontal: 'center', vertical: 'middle' };
+      row.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
       row.getCell(5).numFmt = VND_FMT;
       row.getCell(6).numFmt = VND_FMT;
-      for (let c = 1; c <= 6; c++) row.getCell(c).border = border;
+      for (let c = 1; c <= 6; c++) {
+        row.getCell(c).border = border;
+        row.getCell(c).font = { name: 'Arial', size: 10 };
+      }
     });
 
-    // II. Chi phí
+    // II. CHI PHÍ NHÀ CUNG CẤP
     r += 2;
-    ws.getCell(`A${r}`).value = 'II. CHI PHÍ NHÀ CUNG CẤP';
-    ws.getCell(`A${r}`).font = { name: 'Arial', bold: true };
+    const cSec2 = ws.getCell(`A${r}`);
+    cSec2.value = 'II. CHI PHÍ NHÀ CUNG CẤP DỊCH VỤ (VẬN CHUYỂN, KHÁCH SẠN, ĂN UỐNG)';
+    cSec2.font = { name: 'Arial', bold: true, size: 11.5, color: { argb: 'FF0F172A' } };
     r++;
-    writeHeader(r, ['STT', 'Nhà cung cấp', 'Mã phiếu', 'Loại', 'Trạng thái', 'Thành tiền']);
+    writeHeader(r, ['STT', 'Tên nhà cung cấp', 'Mã phiếu chi', 'Loại hình dịch vụ', 'Trạng thái', 'Chi phí thực chi']);
     lich.PhieuDatDichVu.forEach((p, i) => {
       r++;
       const row = ws.getRow(r);
+      row.height = 20;
       row.values = [i + 1, p.NhaCungCap.TenNCC, p.MaPhieu, p.NhaCungCap.LoaiNCC, p.TrangThai, num(p.TongTienDichVu)];
+      row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+      row.getCell(2).alignment = { horizontal: 'left', vertical: 'middle' };
+      row.getCell(3).alignment = { horizontal: 'center', vertical: 'middle' };
+      row.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+      row.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
       row.getCell(6).numFmt = VND_FMT;
-      for (let c = 1; c <= 6; c++) row.getCell(c).border = border;
+      for (let c = 1; c <= 6; c++) {
+        row.getCell(c).border = border;
+        row.getCell(c).font = { name: 'Arial', size: 10 };
+      }
     });
 
-    // III. Tổng hợp
+    // III. BẢNG TỔNG HỢP & HIỆU QUẢ KINH DOANH
     r += 2;
     const summary: Array<[string, number, string]> = [
-      ['TỔNG DOANH THU', num(s.TongThu), 'FF0F766E'],
-      ['TỔNG CHI PHÍ', num(s.TongChi), 'FFB91C1C'],
-      ['LỢI NHUẬN RÒNG', num(s.TongThu) - num(s.TongChi), num(s.TongThu) - num(s.TongChi) >= 0 ? 'FF15803D' : 'FFB91C1C'],
+      ['TỔNG DOANH THU THỰC THU (1)', num(s.TongThu), 'FF0F766E'],
+      ['TỔNG CHI PHÍ DỊCH VỤ NCC (2)', num(s.TongChi), 'FFB91C1C'],
+      ['LỢI NHUẬN RÒNG (1 - 2)', num(s.TongThu) - num(s.TongChi), num(s.TongThu) - num(s.TongChi) >= 0 ? 'FF15803D' : 'FFB91C1C'],
     ];
     for (const [label, value, color] of summary) {
       ws.mergeCells(`A${r}:E${r}`);
-      ws.getCell(`A${r}`).value = label;
-      ws.getCell(`A${r}`).font = { name: 'Arial', bold: true };
-      ws.getCell(`A${r}`).alignment = { horizontal: 'right' };
-      const c = ws.getCell(`F${r}`);
-      c.value = value;
-      c.numFmt = VND_FMT;
-      c.font = { name: 'Arial', bold: true, color: { argb: color } };
-      c.border = border;
+      const row = ws.getRow(r);
+      row.height = 22;
+      const cLabel = ws.getCell(`A${r}`);
+      cLabel.value = label;
+      cLabel.font = { name: 'Arial', bold: true, size: 10.5 };
+      cLabel.alignment = { horizontal: 'right', vertical: 'middle' };
+      for (let c = 1; c <= 5; c++) row.getCell(c).border = border;
+
+      const cVal = ws.getCell(`F${r}`);
+      cVal.value = value;
+      cVal.numFmt = VND_FMT;
+      cVal.font = { name: 'Arial', bold: true, size: 11, color: { argb: color } };
+      cVal.border = border;
       r++;
     }
 
-    // Khối chữ ký
+    // Khối chữ ký kế toán & Ban giám đốc
     r += 2;
     ws.mergeCells(`B${r}:C${r}`);
     ws.mergeCells(`E${r}:F${r}`);
     ws.getCell(`B${r}`).value = 'NGƯỜI LẬP BIỂU (Kế toán)';
-    ws.getCell(`E${r}`).value = 'GIÁM ĐỐC PHÊ DUYỆT';
-    ws.getCell(`B${r + 1}`).value = '(Ký, ghi rõ họ tên)';
-    ws.getCell(`E${r + 1}`).value = '(Ký, ghi rõ họ tên)';
+    ws.getCell(`E${r}`).value = 'BAN GIÁM ĐỐC PHÊ DUYỆT';
+    ws.getCell(`B${r + 1}`).value = '(Ký, đóng dấu và ghi rõ họ tên)';
+    ws.getCell(`E${r + 1}`).value = '(Ký, đóng dấu và ghi rõ họ tên)';
     ws.getCell(`B${r + 5}`).value = s.NhanVienLap.HoTen;
+
     for (const a of [`B${r}`, `E${r}`, `B${r + 1}`, `E${r + 1}`, `B${r + 5}`]) {
-      ws.getCell(a).alignment = { horizontal: 'center' };
+      ws.getCell(a).alignment = { horizontal: 'center', vertical: 'middle' };
     }
-    ws.getCell(`B${r}`).font = { name: 'Arial', bold: true };
-    ws.getCell(`E${r}`).font = { name: 'Arial', bold: true };
+    ws.getCell(`B${r}`).font = { name: 'Arial', bold: true, size: 11 };
+    ws.getCell(`E${r}`).font = { name: 'Arial', bold: true, size: 11 };
+    ws.getCell(`B${r + 1}`).font = { name: 'Arial', italic: true, size: 9.5, color: { argb: 'FF64748B' } };
+    ws.getCell(`E${r + 1}`).font = { name: 'Arial', italic: true, size: 9.5, color: { argb: 'FF64748B' } };
+    ws.getCell(`B${r + 5}`).font = { name: 'Arial', bold: true, size: 11 };
+
+    // Bảo đảm 100% các ô trên toàn bộ sheet đều dùng font Arial chuẩn Unicode tiếng Việt
+    ws.eachRow((row) => {
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        if (!cell.font) {
+          cell.font = { name: 'Arial', size: 10 };
+        } else if (!cell.font.name) {
+          cell.font.name = 'Arial';
+        }
+      });
+    });
 
     return Buffer.from(await wb.xlsx.writeBuffer());
   }
@@ -197,33 +265,76 @@ export class ExportService {
       orderBy: { NgayLap: 'desc' },
     });
     const wb = new ExcelJS.Workbook();
-    wb.creator = 'VietTour System';
-    const ws = wb.addWorksheet('Bao cao tai chinh');
+    wb.creator = 'VietTour Enterprise Travel System';
+    wb.lastModifiedBy = 'VietTour Accounting';
+    wb.created = new Date();
+    wb.modified = new Date();
+
+    const ws = wb.addWorksheet('Bao cao tai chinh', { views: [{ showGridLines: true }] });
     ws.columns = [
-      { header: 'Mã lịch', key: 'ma', width: 16 },
-      { header: 'Tour', key: 'tour', width: 42 },
-      { header: 'Ngày khởi hành', key: 'ngay', width: 16 },
-      { header: 'Tổng thu', key: 'thu', width: 20 },
-      { header: 'Tổng chi', key: 'chi', width: 20 },
-      { header: 'Lợi nhuận', key: 'ln', width: 20 },
-      { header: 'Người lập', key: 'nguoi', width: 22 },
-      { header: 'Trạng thái', key: 'tt', width: 16 },
+      { header: 'Mã lịch', key: 'ma', width: 18 },
+      { header: 'Tên Tour Du Lịch', key: 'tour', width: 44 },
+      { header: 'Ngày khởi hành', key: 'ngay', width: 18 },
+      { header: 'Tổng thu vé', key: 'thu', width: 22 },
+      { header: 'Tổng chi NCC', key: 'chi', width: 22 },
+      { header: 'Lợi nhuận ròng', key: 'ln', width: 22 },
+      { header: 'Người lập biểu', key: 'nguoi', width: 24 },
+      { header: 'Trạng thái duyệt', key: 'tt', width: 18 },
     ];
-    ws.getRow(1).eachCell((c) => {
-      c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    const headRow = ws.getRow(1);
+    headRow.height = 24;
+    headRow.eachCell((c) => {
+      c.font = { name: 'Arial', bold: true, size: 10.5, color: { argb: 'FFFFFFFF' } };
       c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+      c.alignment = { horizontal: 'center', vertical: 'middle' };
     });
+
     let tThu = 0, tChi = 0;
     for (const s of rows) {
-      tThu += num(s.TongThu); tChi += num(s.TongChi);
-      ws.addRow({
-        ma: s.LichKhoiHanh.MaLich, tour: s.LichKhoiHanh.Tour.TenTour, ngay: fmtDate(s.LichKhoiHanh.NgayKhoiHanh),
-        thu: num(s.TongThu), chi: num(s.TongChi), ln: num(s.TongThu) - num(s.TongChi), nguoi: s.NhanVienLap.HoTen, tt: s.TrangThaiDuyet,
+      tThu += num(s.TongThu);
+      tChi += num(s.TongChi);
+      const r = ws.addRow({
+        ma: s.LichKhoiHanh.MaLich,
+        tour: s.LichKhoiHanh.Tour.TenTour,
+        ngay: fmtDate(s.LichKhoiHanh.NgayKhoiHanh),
+        thu: num(s.TongThu),
+        chi: num(s.TongChi),
+        ln: num(s.TongThu) - num(s.TongChi),
+        nguoi: s.NhanVienLap.HoTen,
+        tt: s.TrangThaiDuyet,
       });
+      r.height = 20;
+      r.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+      r.getCell(3).alignment = { horizontal: 'center', vertical: 'middle' };
+      r.getCell(7).alignment = { horizontal: 'left', vertical: 'middle' };
+      r.getCell(8).alignment = { horizontal: 'center', vertical: 'middle' };
+      for (let i = 1; i <= 8; i++) {
+        r.getCell(i).font = { name: 'Arial', size: 10 };
+      }
     }
-    const total = ws.addRow({ tour: 'TỔNG CỘNG', thu: tThu, chi: tChi, ln: tThu - tChi });
-    total.font = { bold: true };
+
+    const total = ws.addRow({
+      tour: 'TỔNG CỘNG TOÀN HỆ THỐNG',
+      thu: tThu,
+      chi: tChi,
+      ln: tThu - tChi,
+    });
+    total.height = 22;
+    total.font = { name: 'Arial', bold: true, size: 11 };
     for (const k of ['thu', 'chi', 'ln']) ws.getColumn(k).numFmt = VND_FMT;
+
+    // Đảm bảo 100% ô đều dùng font Arial
+    ws.eachRow((row) => {
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        if (!cell.font) {
+          cell.font = { name: 'Arial', size: 10 };
+        } else if (!cell.font.name) {
+          cell.font.name = 'Arial';
+        }
+      });
+    });
+
     return Buffer.from(await wb.xlsx.writeBuffer());
   }
 
@@ -389,18 +500,26 @@ export class TicketMailService {
         paxHtml += `<tr><td style="padding:10px;border-bottom:1px solid #e2e8f0"><b>${p.HoTen}</b><br/><span style="color:#64748b;font-size:12px">${p.LoaiKhach} — ${p.MaQRVe ?? ''}</span></td><td style="padding:10px;border-bottom:1px solid #e2e8f0;text-align:right"><img src="cid:${cid}" width="110" height="110" alt="QR"/></td></tr>`;
       }
       const html = `
-        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
-          <div style="background:#C8102E;color:#fff;padding:20px 24px"><div style="font-size:22px;font-weight:800">VIETTOUR</div><div style="font-size:13px">Xác nhận thanh toán &amp; vé điện tử</div></div>
-          <div style="padding:24px;color:#334155;font-size:14px;line-height:1.6">
-            <p>Xin chào <b>${don.KhachHang.HoTen}</b>, VietTour đã nhận thanh toán cho đơn <b>${don.MaDon}</b>.</p>
-            <table style="width:100%;font-size:14px"><tr><td>Tour</td><td style="text-align:right"><b>${tour.TenTour}</b></td></tr>
-              <tr><td>Khởi hành</td><td style="text-align:right">${fmtDateTime(don.LichKhoiHanh.NgayKhoiHanh)}</td></tr>
-              <tr><td>Hành trình</td><td style="text-align:right">${tour.DiemKhoiHanh} → ${tour.DiemDen}</td></tr>
-              <tr><td>Số khách</td><td style="text-align:right">${don.SoLuongNguoiLon} người lớn, ${don.SoLuongTreEm} trẻ em</td></tr>
-              <tr><td>Đã thanh toán</td><td style="text-align:right"><b>${fmtVnd(num(don.TongTien) - num(don.GiamGia))}</b></td></tr></table>
-            <h3 style="margin:20px 0 6px">Vé điện tử (QR soát vé)</h3>
-            <table style="width:100%;border-collapse:collapse">${paxHtml}</table>
-            <p style="font-size:12px;color:#94a3b8;margin-top:20px">Vui lòng xuất trình mã QR cho Hướng dẫn viên khi tập trung. Hotline 1900 1234.</p>
+        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;max-width:580px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:6px;padding:28px 32px;color:#111111">
+          <div style="border-bottom:1px solid #e5e7eb;padding-bottom:14px;margin-bottom:20px">
+            <div style="font-size:16px;font-weight:700;color:#111111;letter-spacing:0.5px">VIETTOUR</div>
+            <div style="font-size:13.5px;font-weight:600;color:#374151;margin-top:4px">Xác nhận thanh toán &amp; Vé điện tử (E-Ticket)</div>
+          </div>
+          <div style="color:#111111;font-size:14px;line-height:1.6">
+            <p style="margin-top:0">Xin chào <b>${don.KhachHang.HoTen}</b>, VietTour xác nhận đã nhận đủ thanh toán cho đơn đặt tour <b>${don.MaDon}</b>.</p>
+            <table style="width:100%;font-size:13.5px;border-collapse:collapse;border:1px solid #e5e7eb;margin:16px 0">
+              <tr><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#4b5563">Hành trình</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right"><b>${tour.TenTour}</b></td></tr>
+              <tr><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#4b5563">Khởi hành</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right">${fmtDateTime(don.LichKhoiHanh.NgayKhoiHanh)}</td></tr>
+              <tr><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#4b5563">Tuyến điểm</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right">${tour.DiemKhoiHanh} → ${tour.DiemDen}</td></tr>
+              <tr><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#4b5563">Số lượng khách</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:right">${don.SoLuongNguoiLon} người lớn, ${don.SoLuongTreEm} trẻ em</td></tr>
+              <tr><td style="padding:8px 12px;color:#111111"><b>Đã thanh toán</b></td><td style="padding:8px 12px;text-align:right"><b>${fmtVnd(num(don.TongTien) - num(don.GiamGia))}</b></td></tr>
+            </table>
+            <div style="font-size:14px;font-weight:700;margin:20px 0 8px;color:#111111">Danh sách vé điện tử &amp; Mã QR soát vé</div>
+            <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb">${paxHtml}</table>
+            <p style="font-size:12px;color:#6b7280;margin-top:20px;border-top:1px solid #e5e7eb;padding-top:14px">
+              Quý khách vui lòng xuất trình mã QR này và CCCD cho Hướng dẫn viên khi tập trung.<br/>
+              Quầy giao dịch: Ga Quốc Nội, Sân bay Quốc tế Tân Sơn Nhất, TP.HCM • Hotline: 1900 1234
+            </p>
           </div>
         </div>`;
       await createMailTransporter().sendMail({

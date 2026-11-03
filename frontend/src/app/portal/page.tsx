@@ -3,11 +3,11 @@ import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import CustomerHeader from '@/components/customer/CustomerHeader';
 import CustomerFooter from '@/components/customer/CustomerFooter';
-import { api, useApi } from '@/lib/api';
+import { api, getImageUrl, useApi, getApiUrl } from '@/lib/api';
 import { bookingSchema, firstError } from '@/lib/validations';
 import { ApiNotice, vnd } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
-import { Search, MapPin, Calendar, Users, Clock, Plane, Star, Ticket, Check, X, CheckCircle2 } from 'lucide-react';
+import { Search, MapPin, Calendar, Users, Clock, Plane, Star, Ticket, Check, X, CheckCircle2, ShieldCheck, Lock, Smartphone } from 'lucide-react';
 
 type Review = {
   DanhGiaID: number;
@@ -33,6 +33,14 @@ type Tour = {
   DanhMuc: { TenDanhMuc: string };
   LichKhoiHanh: { LichID: number; MaLich: string; NgayKhoiHanh: string; SoChoToiDa: number; SoChoDaDat: number }[];
   DanhGia?: Review[];
+  KhuyenMai?: {
+    CTKMID: number;
+    TenChuongTrinh: string;
+    PhanTramGiam: number;
+    GiaNguoiLonKM: number;
+    GiaTreEmKM: number;
+    NgayKetThuc: string;
+  } | null;
 };
 
 type PassengerInput = {
@@ -53,24 +61,79 @@ export default function CustomerHomePage() {
   const [priceRange, setPriceRange] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
 
-  // Đọc danh mục từ query parameters trên URL (khi click từ navbar)
+  // Đọc danh mục từ query parameters trên URL hoặc sự kiện click trực tiếp từ thanh điều hướng (không cần reload trang)
   useEffect(() => {
+    const applyFilterAndScroll = (cat: string | null, section?: string) => {
+      if (cat && ['MIEN_TRUNG', 'MIEN_BAC', 'QUOC_TE', 'KHUYEN_MAI', 'ALL'].includes(cat)) {
+        setCategoryFilter(cat);
+        if (cat !== 'ALL') {
+          setDestKeyword('');
+          setDepartLocation('ALL');
+          setPriceRange('ALL');
+        }
+      }
+      if (section === 'top') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else if (section === 'about') {
+        const aboutEl = document.getElementById('about');
+        if (aboutEl) setTimeout(() => aboutEl.scrollIntoView({ behavior: 'smooth' }), 60);
+      } else if (section === 'tour-list-section' || (cat && cat !== 'ALL')) {
+        const el = document.getElementById('tour-list-section');
+        if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth' }), 60);
+      }
+    };
+
     const handleUrlCategory = () => {
       if (typeof window === 'undefined') return;
       const params = new URLSearchParams(window.location.search);
       const cat = params.get('category');
-      if (cat && ['MIEN_TRUNG', 'MIEN_BAC', 'QUOC_TE', 'ALL'].includes(cat)) {
-        setCategoryFilter(cat);
-        const el = document.getElementById('tour-list-section');
-        if (el) {
-          setTimeout(() => el.scrollIntoView({ behavior: 'smooth' }), 150);
-        }
+      const hash = window.location.hash;
+      if (hash === '#about') {
+        applyFilterAndScroll(cat, 'about');
+      } else if (cat) {
+        applyFilterAndScroll(cat, 'tour-list-section');
       }
     };
+
+    const handleCustomNav = (e: Event) => {
+      const detail = (e as CustomEvent<{ category?: string; section?: string }>).detail;
+      if (!detail) return;
+      applyFilterAndScroll(detail.category ?? null, detail.section);
+    };
+
     handleUrlCategory();
     window.addEventListener('popstate', handleUrlCategory);
-    return () => window.removeEventListener('popstate', handleUrlCategory);
+    window.addEventListener('viettour:nav-filter', handleCustomNav as EventListener);
+    return () => {
+      window.removeEventListener('popstate', handleUrlCategory);
+      window.removeEventListener('viettour:nav-filter', handleCustomNav as EventListener);
+    };
   }, []);
+
+  // Đồng hồ thời gian thực (cập nhật mỗi giây) để tự động ẩn khuyến mãi / voucher ngay khi hết hạn
+  const [nowTs, setNowTs] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Kiểm tra khuyến mãi của tour còn hiệu lực tại thời điểm hiện tại hay không
+  const getActivePromo = (t?: Tour | null) => {
+    const km = t?.KhuyenMai;
+    if (!km) return null;
+    const endMs = new Date(km.NgayKetThuc).getTime();
+    if (Number.isNaN(endMs) || endMs <= nowTs) return null;
+    return km;
+  };
+
+  // Kiểm tra ngày khởi hành đã qua hạn hay chưa
+  const isDepartureExpired = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
+    return endOfDay < nowTs;
+  };
+
+  const [hidePastDatesInModal, setHidePastDatesInModal] = useState(true);
 
   // Modal Đặt tour đa bước (Step-by-step)
   const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
@@ -90,8 +153,9 @@ export default function CustomerHomePage() {
 
   // Modal Thanh toán sau khi đặt tour thành công
   const [createdBooking, setCreatedBooking] = useState<{ MaDon: string; TongTien: number; DonHangID: number } | null>(null);
-  const [payMethod, setPayMethod] = useState<'VNPAY' | 'CASH_CARD'>('VNPAY');
+  const [payMethod, setPayMethod] = useState<'VNPAY' | 'ZALOPAY' | 'CASH_CARD'>('VNPAY');
   const [loadingVnpay, setLoadingVnpay] = useState(false);
+  const [loadingZalopay, setLoadingZalopay] = useState(false);
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
 
   const handlePayVNPay = async (donHangId: number, amount: number, maDon: string) => {
@@ -115,11 +179,64 @@ export default function CustomerHomePage() {
     }
   };
 
+  const handlePayZaloPay = async (donHangId: number, amount: number, maDon: string) => {
+    try {
+      setLoadingZalopay(true);
+      const res = await api<{ orderUrl?: string }>('/zalopay/create-payment', {
+        method: 'POST',
+        body: JSON.stringify({
+          donHangId,
+          amount,
+          orderInfo: `Thanh toan don tour ${maDon} qua ZaloPay`,
+        }),
+      });
+      if (res.orderUrl) {
+        window.location.href = res.orderUrl;
+      }
+    } catch (err: any) {
+      alert('Không thể kết nối cổng ZaloPay: ' + (err?.message || 'Lỗi kết nối'));
+    } finally {
+      setLoadingZalopay(false);
+    }
+  };
+
   // Modal Xem chi tiết tour nhanh
   const [detailTour, setDetailTour] = useState<Tour | null>(null);
   const [detailTab, setDetailTab] = useState<'OVERVIEW' | 'SCHEDULES' | 'REVIEWS'>('OVERVIEW');
 
   const tours = useApi<Tour[]>(`/tours`);
+  const publicVouchers = useApi<any[]>(`/portal/vouchers`);
+
+  // Lọc danh sách voucher còn hạn tại thời điểm hiện tại
+  const activeVouchersStrip = useMemo(() => {
+    const list = (publicVouchers.data ?? []).filter((v) => {
+      if (!v) return false;
+      if (v.TrangThai !== 1 && v.TrangThai !== 'Hoat dong') return false;
+      const startMs = new Date(v.NgayBatDau).getTime();
+      const dEnd = new Date(v.NgayKetThuc);
+      const endMs =
+        dEnd.getHours() === 0 && dEnd.getMinutes() === 0
+          ? new Date(dEnd.getFullYear(), dEnd.getMonth(), dEnd.getDate(), 23, 59, 59, 999).getTime()
+          : dEnd.getTime();
+      if (Number.isNaN(endMs) || endMs <= nowTs || startMs > nowTs) return false;
+      const maxUsed = v.SoLuongToiDa ?? v.SoLuotToiDa;
+      const curUsed = v.soDaDung ?? v.SoLuotDaDung ?? 0;
+      if (maxUsed != null && curUsed >= maxUsed) return false;
+      return true;
+    });
+    if (list.length > 0) {
+      return list.map((v) => {
+        const code = v.MaVoucher || v.MaCode;
+        const pct = Number(v.PhanTramGiam ?? v.GiaTriGiam ?? 10);
+        const maxVal = v.GiamToiDa ? ` (Tối đa ${vnd(v.GiamToiDa)})` : '';
+        return {
+          code,
+          label: `${v.TenChuongTrinh ? `${v.TenChuongTrinh} — ` : ''}Giảm ${pct}%${maxVal}`,
+        };
+      });
+    }
+    return [];
+  }, [publicVouchers.data, nowTs]);
 
   // Đồng bộ số lượng khách với mảng hành khách
   const syncPassengersCount = (newAdults: number, newChildren: number) => {
@@ -138,7 +255,10 @@ export default function CustomerHomePage() {
       } else if (next.length > total) {
         return next.slice(0, total);
       }
-      return next;
+      return next.map((p, idx) => ({
+        ...p,
+        loaiKhach: idx < newAdults ? 'Nguoi lon' : 'Tre em',
+      }));
     });
   };
 
@@ -156,7 +276,12 @@ export default function CustomerHomePage() {
       { hoTen: user?.name || '', gioiTinh: 'Nam', cccd: '', loaiKhach: 'Nguoi lon' }
     ]);
     if (t.LichKhoiHanh && t.LichKhoiHanh.length > 0) {
-      setSelectedLichId(t.LichKhoiHanh[0].LichID);
+      // Ưu tiên chọn đợt khởi hành gần nhất chưa qua ngày và còn chỗ trống
+      const validUpcoming = t.LichKhoiHanh.find(
+        (l) => !isDepartureExpired(l.NgayKhoiHanh) && l.SoChoToiDa - l.SoChoDaDat > 0
+      );
+      const fallbackUpcoming = t.LichKhoiHanh.find((l) => !isDepartureExpired(l.NgayKhoiHanh));
+      setSelectedLichId((validUpcoming || fallbackUpcoming || t.LichKhoiHanh[0]).LichID);
     } else {
       setSelectedLichId(t.TourID || 1);
     }
@@ -167,11 +292,48 @@ export default function CustomerHomePage() {
     setDetailTab('OVERVIEW');
   };
 
-  // Tính tiền tạm tính
+  // Thông tin lịch khởi hành đang chọn trong Modal Đặt ngay
+  const selectedModalLich = useMemo(() => {
+    if (!selectedTour?.LichKhoiHanh?.length) return null;
+    return selectedTour.LichKhoiHanh.find((l) => l.LichID === selectedLichId) || selectedTour.LichKhoiHanh[0];
+  }, [selectedTour, selectedLichId]);
+
+  const modalMaxSeats = selectedModalLich ? selectedModalLich.SoChoToiDa : 30;
+  const modalBookedSeats = selectedModalLich ? selectedModalLich.SoChoDaDat : 0;
+  const modalRemainingSeats = Math.max(0, modalMaxSeats - modalBookedSeats);
+  const modalTotalRequested = adults + children;
+  const isModalScheduleExpired = selectedModalLich ? isDepartureExpired(selectedModalLich.NgayKhoiHanh) : false;
+  const isModalSoldOut = modalRemainingSeats <= 0 || isModalScheduleExpired;
+  const isModalOverCapacity = modalTotalRequested > modalRemainingSeats;
+
+  // Kiểm tra trùng CCCD và ràng buộc đủ Họ tên + 12 số CCCD ở Bước 2
+  const duplicateModalCccds = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of passengers) {
+      const c = p.cccd.trim();
+      if (c.length === 12) counts.set(c, (counts.get(c) || 0) + 1);
+    }
+    const dups = new Set<string>();
+    counts.forEach((cnt, k) => {
+      if (cnt > 1) dups.add(k);
+    });
+    return dups;
+  }, [passengers]);
+
+  const isModalPassengersValid = useMemo(() => {
+    if (passengers.length !== modalTotalRequested || modalTotalRequested < 1) return false;
+    if (duplicateModalCccds.size > 0) return false;
+    return passengers.every((p) => p.hoTen.trim().length >= 2 && /^\d{12}$/.test(p.cccd.trim()));
+  }, [passengers, modalTotalRequested, duplicateModalCccds]);
+
+  // Tính tiền tạm tính (Tự động về giá gốc ngay khi khuyến mãi hết hạn)
   const currentSubtotal = useMemo(() => {
     if (!selectedTour) return 0;
-    return Number(selectedTour.GiaNguoiLon) * adults + Number(selectedTour.GiaTreEm) * children;
-  }, [selectedTour, adults, children]);
+    const km = getActivePromo(selectedTour);
+    const adultPrice = (km && typeof km.GiaNguoiLonKM === 'number') ? km.GiaNguoiLonKM : Number(selectedTour.GiaNguoiLon);
+    const childPrice = (km && typeof km.GiaTreEmKM === 'number') ? km.GiaTreEmKM : Number(selectedTour.GiaTreEm);
+    return adultPrice * adults + childPrice * children;
+  }, [selectedTour, adults, children, nowTs]);
 
   const finalTotal = Math.max(currentSubtotal - voucherDiscount, 0);
 
@@ -188,6 +350,7 @@ export default function CustomerHomePage() {
           body: JSON.stringify({
             maKhuyenMai: voucherCode.trim().toUpperCase(),
             tongTien: currentSubtotal,
+            tourId: selectedTour?.TourID,
           }),
         }
       );
@@ -250,7 +413,7 @@ export default function CustomerHomePage() {
       // Đặt tour thành công -> mở ngay modal thanh toán VNPay & Tiền mặt/Thẻ
       setCreatedBooking({
         MaDon: res.MaDon,
-        TongTien: Number(res.TongTien) - voucherDiscount,
+        TongTien: Number((res as any).TienConLai ?? (Number(res.TongTien) - voucherDiscount)),
         DonHangID: res.DonHangID,
       });
       setSelectedTour(null);
@@ -270,14 +433,12 @@ export default function CustomerHomePage() {
     }
   };
 
-  // Lọc danh sách tour theo tất cả tiêu chí
+  // Lọc danh sách tour theo tất cả tiêu chí (kể cả bộ lọc Khuyến mãi trực tiếp)
   const filteredTours = useMemo(() => {
     return (tours.data ?? []).filter((t) => {
-      // 1. Chế độ tìm kiếm (Mode)
-      if (searchMode === 'FLIGHT' && t.DanhMuc?.TenDanhMuc?.includes('Quoc Te')) {
-        // Luôn hiển thị
-      }
-      // 2. Điểm đến / Từ khóa
+      const activePromo = getActivePromo(t);
+
+      // 1. Điểm đến / Từ khóa
       if (destKeyword.trim()) {
         const kw = destKeyword.toLowerCase().trim();
         const matchTitle = t.TenTour.toLowerCase().includes(kw);
@@ -285,36 +446,72 @@ export default function CustomerHomePage() {
         const matchCat = t.DanhMuc?.TenDanhMuc?.toLowerCase().includes(kw);
         if (!matchTitle && !matchDest && !matchCat) return false;
       }
-      // 3. Điểm khởi hành
+      // 2. Điểm khởi hành
       if (departLocation !== 'ALL') {
         if (!t.DiemKhoiHanh?.toLowerCase().includes(departLocation.toLowerCase())) return false;
       }
-      // 4. Danh mục tabs
+      // 3. Lọc theo ngày khởi hành (nếu người dùng chọn trên thanh tìm kiếm)
+      if (departDate) {
+        const hasMatchingDate = (t.LichKhoiHanh ?? []).some(
+          (l) => new Date(l.NgayKhoiHanh).toISOString().slice(0, 10) === departDate
+        );
+        if (!hasMatchingDate) return false;
+      }
+      // 4. Danh mục tabs (MIEN_TRUNG, MIEN_BAC, QUOC_TE, KHUYEN_MAI)
       if (categoryFilter === 'MIEN_TRUNG') {
-        if (!t.TenTour.includes('Đà Nẵng') && !t.TenTour.includes('Hội An') && !t.TenTour.includes('Huế')) return false;
+        const catName = (t.DanhMuc?.TenDanhMuc || '').toLowerCase();
+        if (
+          !t.TenTour.includes('Đà Nẵng') &&
+          !t.TenTour.includes('Hội An') &&
+          !t.TenTour.includes('Huế') &&
+          !catName.includes('trung')
+        ) {
+          return false;
+        }
       }
       if (categoryFilter === 'MIEN_BAC') {
-        if (!t.TenTour.includes('Sapa') && !t.TenTour.includes('Hạ Long') && !t.TenTour.includes('Hà Nội')) return false;
+        const catName = (t.DanhMuc?.TenDanhMuc || '').toLowerCase();
+        if (
+          !t.TenTour.includes('Sapa') &&
+          !t.TenTour.includes('Hạ Long') &&
+          !t.TenTour.includes('Hà Nội') &&
+          !catName.includes('bắc') &&
+          !catName.includes('bac')
+        ) {
+          return false;
+        }
       }
       if (categoryFilter === 'QUOC_TE') {
-        if (!t.TenTour.includes('Nhật') && !t.TenTour.includes('Hàn') && !t.TenTour.includes('Thái')) return false;
+        const catName = (t.DanhMuc?.TenDanhMuc || '').toLowerCase();
+        if (
+          !t.TenTour.includes('Nhật') &&
+          !t.TenTour.includes('Hàn') &&
+          !t.TenTour.includes('Thái') &&
+          !catName.includes('quốc tế') &&
+          !catName.includes('quoc te')
+        ) {
+          return false;
+        }
+      }
+      if (categoryFilter === 'KHUYEN_MAI') {
+        if (!activePromo) return false;
       }
       // 5. Mức giá
-      const price = Number(t.GiaNguoiLon);
+      const price = activePromo?.GiaNguoiLonKM ? Number(activePromo.GiaNguoiLonKM) : Number(t.GiaNguoiLon);
       if (priceRange === 'UNDER_5M' && price > 5000000) return false;
       if (priceRange === '5M_15M' && (price < 5000000 || price > 15000000)) return false;
       if (priceRange === 'OVER_15M' && price < 15000000) return false;
 
       return true;
     });
-  }, [tours.data, searchMode, destKeyword, departLocation, categoryFilter, priceRange]);
+  }, [tours.data, searchMode, destKeyword, departLocation, departDate, categoryFilter, priceRange, nowTs]);
 
   // Lắng nghe tự động (Polling mỗi 2 giây) khi quét QR trên điện thoại hoàn tất
   useEffect(() => {
     if (!createdBooking?.MaDon) return;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`http://localhost:4000/api/bookings/ticket/${createdBooking.MaDon}`);
+        const res = await fetch(`${getApiUrl()}/bookings/ticket/${createdBooking.MaDon}`);
         if (res.ok) {
           const data = await res.json();
           if (data.TrangThaiDon === 'Da thanh toan') {
@@ -534,11 +731,7 @@ export default function CustomerHomePage() {
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-end' }}>
-              {[
-                { code: 'VIETTOUR2026', label: 'Giảm 10% (Tối đa 1Tr)' },
-                { code: 'BAYHE2026', label: 'Tour Bay Giảm 15% (Tối đa 1.5Tr)' },
-                { code: 'TRIAN500K', label: 'Tri Ân Khách Mới (-500K)' },
-              ].map((v) => (
+              {activeVouchersStrip.map((v) => (
                 <div
                   key={v.code}
                   style={{
@@ -588,17 +781,18 @@ export default function CustomerHomePage() {
                 HÀNH TRÌNH CHỌN LỌC
               </span>
               <h2 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--zinc-900)', marginTop: '2px', letterSpacing: '-0.3px' }}>
-                Tour Du Lịch Đang Mở Bán
+                {categoryFilter === 'KHUYEN_MAI' ? 'Chương Trình Khuyến Mãi Đang Áp Dụng' : 'Tour Du Lịch Đang Mở Bán'}
               </h2>
             </div>
 
             {/* CATEGORY TABS */}
-            <div style={{ display: 'flex', gap: '4px', background: '#FFFFFF', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', gap: '4px', background: '#FFFFFF', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', flexWrap: 'wrap' }}>
               {[
                 { id: 'ALL', label: 'Tất cả tour' },
                 { id: 'MIEN_TRUNG', label: 'Miền Trung' },
                 { id: 'MIEN_BAC', label: 'Miền Bắc' },
                 { id: 'QUOC_TE', label: 'Quốc Tế' },
+                { id: 'KHUYEN_MAI', label: 'Đang khuyến mãi' },
               ].map((c) => (
                 <button
                   key={c.id}
@@ -623,11 +817,44 @@ export default function CustomerHomePage() {
 
           <ApiNotice error={tours.error} />
 
+          {filteredTours.length === 0 && !tours.loading && (
+            <div style={{ background: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0', padding: '40px 24px', textAlign: 'center', color: '#64748B' }}>
+              <div style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>
+                Không tìm thấy hành trình phù hợp với bộ lọc hiện tại
+              </div>
+              <p style={{ fontSize: '13px', margin: '0 0 16px' }}>
+                Quý khách có thể đặt lại bộ lọc để xem toàn bộ danh sách tour đang mở bán.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setCategoryFilter('ALL');
+                  setDestKeyword('');
+                  setDepartLocation('ALL');
+                  setDepartDate('');
+                  setPriceRange('ALL');
+                }}
+                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #0F172A', background: '#0F172A', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Xem tất cả hành trình
+              </button>
+            </div>
+          )}
+
           {/* TOUR CARDS GRID */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' }}>
             {filteredTours.map((t) => {
-              const nearestLich = t.LichKhoiHanh?.[0];
-              const remainSeats = nearestLich ? nearestLich.SoChoToiDa - nearestLich.SoChoDaDat : 15;
+              const activePromo = getActivePromo(t);
+              // Ưu tiên chọn lịch khởi hành chưa qua ngày và còn chỗ trống (tránh hiển thị ngày cũ đã qua như 25/10/2026)
+              const upcomingLich =
+                t.LichKhoiHanh?.find((l) => !isDepartureExpired(l.NgayKhoiHanh) && l.SoChoToiDa - l.SoChoDaDat > 0) ||
+                t.LichKhoiHanh?.find((l) => !isDepartureExpired(l.NgayKhoiHanh)) ||
+                t.LichKhoiHanh?.[t.LichKhoiHanh.length - 1];
+              const isCardExpired = upcomingLich ? isDepartureExpired(upcomingLich.NgayKhoiHanh) : false;
+              const maxSeats = upcomingLich ? upcomingLich.SoChoToiDa : 30;
+              const bookedSeats = upcomingLich ? upcomingLich.SoChoDaDat : 0;
+              const remainSeats = upcomingLich ? Math.max(0, upcomingLich.SoChoToiDa - upcomingLich.SoChoDaDat) : 15;
+              const isCardUnavailable = isCardExpired || remainSeats <= 0;
 
               return (
                 <div
@@ -647,14 +874,19 @@ export default function CustomerHomePage() {
                   <div style={{ position: 'relative', height: '200px', overflow: 'hidden' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={t.HinhAnhURL || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600'}
+                      src={getImageUrl(t.HinhAnhURL) || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600'}
                       alt={t.TenTour}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />
-                    <div style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', gap: '6px' }}>
+                    <div style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                       <span style={{ background: 'rgba(15, 23, 42, 0.85)', color: '#FFF', fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: 'var(--radius-sm)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <Plane size={11} strokeWidth={1.5} /> Bao gồm vé máy bay
+                        <Plane size={11} strokeWidth={1.5} /> {t.PhuongTien || 'Bao gồm vé máy bay'}
                       </span>
+                      {activePromo && (
+                        <span style={{ background: '#BE123C', color: '#FFF', fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: 'var(--radius-sm)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          GIẢM {activePromo.PhanTramGiam}%
+                        </span>
+                      )}
                     </div>
                     <div style={{ position: 'absolute', bottom: '10px', right: '10px', background: 'rgba(15, 23, 42, 0.85)', color: '#FFF', fontSize: '11px', padding: '3px 8px', borderRadius: 'var(--radius-sm)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                       <Clock size={11} strokeWidth={1.5} /> {t.ThoiGian}
@@ -670,48 +902,93 @@ export default function CustomerHomePage() {
                       </span>
                     </div>
 
-                    <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', marginBottom: '10px', lineHeight: 1.35 }}>
-                      {t.TenTour}
-                    </h3>
+                    <Link
+                      href={`/portal/tours/${t.TourID}`}
+                      style={{ textDecoration: 'none', color: 'inherit' }}
+                    >
+                      <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', marginBottom: '10px', lineHeight: 1.35 }}>
+                        {t.TenTour}
+                      </h3>
+                    </Link>
 
-                    <div style={{ fontSize: '12px', color: 'var(--zinc-600)', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ fontSize: '12.5px', color: 'var(--zinc-600)', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <MapPin size={12} strokeWidth={1.5} color="var(--zinc-500)" />
+                        <MapPin size={12.5} strokeWidth={1.6} color="var(--zinc-500)" />
                         <span>Khởi hành: <strong>{t.DiemKhoiHanh || 'TP. Hồ Chí Minh'}</strong> → <strong>{t.DiemDen}</strong></span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Calendar size={12} strokeWidth={1.5} color="var(--zinc-500)" />
-                        <span>Ngày gần nhất: <strong>{nearestLich ? new Date(nearestLich.NgayKhoiHanh).toLocaleDateString('vi-VN') : '15/10/2026'}</strong></span>
+                        <Calendar size={12.5} strokeWidth={1.6} color="var(--zinc-500)" />
+                        <span>
+                          Khởi hành gần nhất:{' '}
+                          <strong style={{ color: isCardExpired ? '#94A3B8' : '#0F172A' }}>
+                            {upcomingLich ? new Date(upcomingLich.NgayKhoiHanh).toLocaleDateString('vi-VN') : 'Đang cập nhật'}
+                          </strong>
+                          {isCardExpired && <span style={{ color: '#E11D48', fontSize: '11px', marginLeft: '4px' }}>(Đã khởi hành)</span>}
+                        </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: remainSeats <= 5 ? 'var(--rose-600)' : 'var(--emerald-600)', fontWeight: 600 }}>
-                        <Users size={12} strokeWidth={1.5} />
-                        <span>Còn lại: <strong>{remainSeats} chỗ trống</strong></span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isCardUnavailable ? '#BE123C' : remainSeats <= 5 ? '#D97706' : '#047857', fontWeight: 600 }}>
+                        <Users size={12.5} strokeWidth={1.6} />
+                        {isCardExpired ? (
+                          <span>Tình trạng: <strong>Đã đóng sổ đợt này</strong></span>
+                        ) : remainSeats <= 0 ? (
+                          <span>Đã đăng ký: <strong>{bookedSeats}/{maxSeats} khách</strong> • <strong>Đã hết chỗ</strong></span>
+                        ) : (
+                          <span>
+                            Đã đăng ký: <strong>{bookedSeats}/{maxSeats} khách</strong> • Còn <strong>{remainSeats} chỗ trống</strong>
+                          </span>
+                        )}
                       </div>
                     </div>
 
                     {/* PRICE & ACTION BUTTONS */}
                     <div style={{ marginTop: 'auto', paddingTop: '14px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Giá từ:</span>
-                        <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--zinc-900)' }}>
-                          {vnd(t.GiaNguoiLon)}
-                        </div>
+                        {activePromo ? (
+                          <>
+                            <span style={{ fontSize: '11px', color: '#BE123C', fontWeight: 700, display: 'block' }}>
+                              Ưu đãi giảm {activePromo.PhanTramGiam}%:
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                              <span style={{ fontSize: '18px', fontWeight: 800, color: '#BE123C' }}>
+                                {vnd(activePromo.GiaNguoiLonKM)}
+                              </span>
+                              <span style={{ fontSize: '12px', color: '#94A3B8', textDecoration: 'line-through' }}>
+                                {vnd(t.GiaNguoiLon)}
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Giá trọn gói:</span>
+                            <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--zinc-900)' }}>
+                              {vnd(t.GiaNguoiLon)}
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        <button
+                        <Link
+                          href={`/portal/tours/${t.TourID}`}
                           className="btn btn-outline btn-sm"
-                          onClick={() => handleOpenDetail(t)}
-                          style={{ padding: '6px 12px', fontSize: '12.5px' }}
+                          style={{ padding: '6px 12px', fontSize: '12.5px', textDecoration: 'none' }}
                         >
                           Chi tiết
-                        </button>
+                        </Link>
                         <button
                           className="btn btn-primary btn-sm"
                           onClick={() => handleOpenBooking(t)}
-                          style={{ padding: '6px 14px', fontSize: '12.5px', background: 'var(--zinc-900)', borderColor: 'var(--zinc-900)' }}
+                          disabled={isCardUnavailable}
+                          style={{
+                            padding: '6px 14px',
+                            fontSize: '12.5px',
+                            background: isCardUnavailable ? '#E2E8F0' : 'var(--zinc-900)',
+                            borderColor: isCardUnavailable ? '#CBD5E1' : 'var(--zinc-900)',
+                            color: isCardUnavailable ? '#64748B' : '#FFFFFF',
+                            cursor: isCardUnavailable ? 'not-allowed' : 'pointer',
+                          }}
                         >
-                          Đặt ngay
+                          {isCardUnavailable ? 'Hết chỗ' : 'Đặt ngay'}
                         </button>
                       </div>
                     </div>
@@ -724,242 +1001,513 @@ export default function CustomerHomePage() {
       </main>
 
       {/* ========================================================================= */}
-      {/* 4. MODAL ĐẶT TOUR ĐA BƯỚC (AIRLINE STEP-BY-STEP BOOKING) */}
+      {/* 4. MODAL ĐẶT TOUR ĐA BƯỚC (CHUẨN NGHIỆP VỤ LỮ HÀNH & RÀNG BUỘC TRƯỚC THANH TOÁN) */}
       {/* ========================================================================= */}
       {selectedTour && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)', zIndex: 1100,
+          position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.65)', zIndex: 1100,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
         }}>
-          <div style={{ maxWidth: '580px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', padding: '24px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ maxWidth: '610px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: '14px', background: '#FFFFFF', padding: '24px 26px', border: '1px solid #E2E8F0', boxShadow: '0 20px 45px rgba(15, 23, 42, 0.18)' }}>
+            {/* HEADER MODAL */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', paddingBottom: '14px', borderBottom: '1px solid #F1F5F9' }}>
               <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--zinc-900)', margin: 0 }}>
-                  Đăng Ký Tour Trực Tuyến
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: '2px' }}>
+                  ĐĂNG KÝ GIỮ CHỖ TRỰC TUYẾN • {selectedTour.MaTour}
+                </div>
+                <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#0F172A', margin: 0, lineHeight: 1.35 }}>
+                  {selectedTour.TenTour}
                 </h3>
-                <span style={{ fontSize: '12px', color: 'var(--zinc-600)', fontWeight: 500 }}>{selectedTour.TenTour}</span>
               </div>
-              <button className="btn btn-outline btn-sm" onClick={() => setSelectedTour(null)} style={{ padding: '4px 8px' }}>
-                <X size={14} strokeWidth={1.5} />
+              <button
+                type="button"
+                onClick={() => setSelectedTour(null)}
+                style={{ width: '30px', height: '30px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#FFFFFF', color: '#475569', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}
+              >
+                <X size={15} strokeWidth={1.8} />
               </button>
             </div>
 
-            {/* BƯỚC TIẾN TRÌNH */}
-            <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '20px', background: '#F8FAFC', padding: '8px', borderRadius: '10px' }}>
-              <span style={{ fontSize: '12.5px', fontWeight: bookingStep === 1 ? 800 : 500, color: bookingStep === 1 ? '#005BAA' : '#64748B' }}>
-                1. Lịch & Số khách
-              </span>
-              <span>→</span>
-              <span style={{ fontSize: '12.5px', fontWeight: bookingStep === 2 ? 800 : 500, color: bookingStep === 2 ? '#005BAA' : '#64748B' }}>
-                2. Hành khách & CCCD
-              </span>
-              <span>→</span>
-              <span style={{ fontSize: '12.5px', fontWeight: bookingStep === 3 ? 800 : 500, color: bookingStep === 3 ? '#005BAA' : '#64748B' }}>
-                3. Mã giảm & Xác nhận
-              </span>
+            {/* THANH TIẾN TRÌNH 3 BƯỚC RÕ RÀNG */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '20px', background: '#F8FAFC', padding: '5px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+              {[
+                { step: 1, label: '1. Ngày đi & Số chỗ' },
+                { step: 2, label: '2. Thông tin khách' },
+                { step: 3, label: '3. Ưu đãi & Thanh toán' },
+              ].map((st) => {
+                const isActive = bookingStep === st.step;
+                const isDone = bookingStep > st.step;
+                return (
+                  <div
+                    key={st.step}
+                    style={{
+                      textAlign: 'center',
+                      padding: '8px 6px',
+                      borderRadius: '7px',
+                      fontSize: '12px',
+                      fontWeight: isActive ? 700 : 600,
+                      background: isActive ? '#0F172A' : isDone ? '#F1F5F9' : 'transparent',
+                      color: isActive ? '#FFFFFF' : isDone ? '#0F172A' : '#64748B',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {st.label}
+                  </div>
+                );
+              })}
             </div>
 
-            {/* BƯỚC 1: CHỌN LỊCH VÀ SỐ KHÁCH */}
-            {bookingStep === 1 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div>
-                  <label style={{ fontSize: '12.5px', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                    Chọn Đợt Khởi Hành Mở Bán <span style={{ color: '#E11D48' }}>*</span>
-                  </label>
-                  <select
-                    className="select"
-                    style={{ width: '100%', fontSize: '13.5px' }}
-                    value={selectedLichId || ''}
-                    onChange={(e) => setSelectedLichId(Number(e.target.value))}
+            {/* BƯỚC 1: CHỌN LỊCH KHỞI HÀNH (HIỂN THỊ RÕ ĐÃ ĐĂNG KÝ / CÒN TRỐNG) & SỐ LƯỢNG KHÁCH */}
+            {bookingStep === 1 && (() => {
+              const activePromo = getActivePromo(selectedTour);
+              const allSchedules = selectedTour.LichKhoiHanh ?? [];
+              const visibleSchedules = hidePastDatesInModal
+                ? allSchedules.filter((l) => !isDepartureExpired(l.NgayKhoiHanh))
+                : allSchedules;
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* CHỌN ĐỢT KHỞI HÀNH */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <label style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                        Chọn đợt khởi hành mở bán
+                      </label>
+                      {allSchedules.some((l) => isDepartureExpired(l.NgayKhoiHanh)) && (
+                        <label style={{ fontSize: '12px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={hidePastDatesInModal}
+                            onChange={(e) => setHidePastDatesInModal(e.target.checked)}
+                            style={{ accentColor: '#0F172A' }}
+                          />
+                          Ẩn ngày đã qua
+                        </label>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '190px', overflowY: 'auto', paddingRight: '2px' }}>
+                      {visibleSchedules.length === 0 ? (
+                        <div style={{ padding: '14px', borderRadius: '10px', background: '#FFF1F2', border: '1px solid #FECDD3', color: '#BE123C', fontSize: '12.5px', fontWeight: 600, textAlign: 'center' }}>
+                          Hiện tại không còn đợt khởi hành nào mở bán cho hành trình này.
+                        </div>
+                      ) : (
+                        visibleSchedules.map((l) => {
+                          const expired = isDepartureExpired(l.NgayKhoiHanh);
+                          const remain = Math.max(0, l.SoChoToiDa - l.SoChoDaDat);
+                          const full = remain <= 0;
+                          const isSelected = selectedLichId === l.LichID;
+                          const fillPercent = Math.min(100, Math.round((l.SoChoDaDat / Math.max(1, l.SoChoToiDa)) * 100));
+
+                          return (
+                            <div
+                              key={l.LichID}
+                              onClick={() => {
+                                if (!expired && !full) {
+                                  setSelectedLichId(l.LichID);
+                                  // Nếu số khách đang chọn vượt quá số chỗ trống của lịch mới thì tự động hạ xuống
+                                  if (adults + children > remain && remain >= 1) {
+                                    const nextAdults = Math.min(adults, remain);
+                                    const nextChildren = Math.max(0, Math.min(children, remain - nextAdults));
+                                    setAdults(nextAdults);
+                                    setChildren(nextChildren);
+                                    syncPassengersCount(nextAdults, nextChildren);
+                                  }
+                                }
+                              }}
+                              style={{
+                                padding: '11px 14px',
+                                borderRadius: '10px',
+                                border: isSelected ? '1.5px solid #0F172A' : '1px solid #E2E8F0',
+                                background: expired || full ? '#F8FAFC' : isSelected ? '#F8FAFC' : '#FFFFFF',
+                                opacity: expired || full ? 0.65 : 1,
+                                cursor: expired || full ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.15s',
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+                                    {new Date(l.NgayKhoiHanh).toLocaleDateString('vi-VN')}
+                                  </span>
+                                  <span style={{ fontSize: '11.5px', color: '#64748B' }}>({l.MaLich})</span>
+                                </div>
+                                <span
+                                  style={{
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                    background: expired ? '#E2E8F0' : full ? '#FFE4E6' : remain <= 5 ? '#FEF3C7' : '#ECFDF5',
+                                    color: expired ? '#475569' : full ? '#BE123C' : remain <= 5 ? '#B45309' : '#047857',
+                                  }}
+                                >
+                                  {expired ? 'Đã qua ngày' : full ? 'Hết chỗ (0 chỗ)' : `Còn ${remain} chỗ trống`}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#64748B', marginBottom: '5px' }}>
+                                <span>Đã đăng ký: <strong style={{ color: '#0F172A' }}>{l.SoChoDaDat}</strong> khách</span>
+                                <span>Tổng số chỗ: <strong style={{ color: '#0F172A' }}>{l.SoChoToiDa}</strong> chỗ</span>
+                              </div>
+                              <div style={{ height: '4px', background: '#E2E8F0', borderRadius: '999px', overflow: 'hidden' }}>
+                                <div
+                                  style={{
+                                    width: `${fillPercent}%`,
+                                    height: '100%',
+                                    background: full ? '#E11D48' : remain <= 5 ? '#D97706' : '#0F172A',
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  {/* BẢNG TÓM TẮT SỐ CHỖ TRỰC TIẾP */}
+                  {selectedModalLich && (
+                    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '12px 14px' }}>
+                      <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Tình trạng chỗ đợt {selectedModalLich.MaLich}</span>
+                        <span>Khởi hành: {new Date(selectedModalLich.NgayKhoiHanh).toLocaleDateString('vi-VN')}</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', textAlign: 'center' }}>
+                        <div style={{ background: '#FFFFFF', padding: '8px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                          <div style={{ fontSize: '11px', color: '#64748B' }}>Tổng số chỗ</div>
+                          <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A' }}>{modalMaxSeats}</div>
+                        </div>
+                        <div style={{ background: '#FFFFFF', padding: '8px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                          <div style={{ fontSize: '11px', color: '#64748B' }}>Đã đăng ký</div>
+                          <div style={{ fontSize: '15px', fontWeight: 800, color: '#334155' }}>{modalBookedSeats}</div>
+                        </div>
+                        <div style={{ background: '#FFFFFF', padding: '8px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                          <div style={{ fontSize: '11px', color: '#64748B' }}>Còn nhận</div>
+                          <div style={{ fontSize: '15px', fontWeight: 800, color: modalRemainingSeats > 0 ? '#047857' : '#BE123C' }}>
+                            {modalRemainingSeats}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SỐ LƯỢNG HÀNH KHÁCH (THIẾT KẾ STEPPER GỌN GÀNG, RÀNG BUỘC KHÔNG VƯỢT QUÁ CHỖ TRỐNG) */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <label style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                        Số lượng hành khách tham gia
+                      </label>
+                      <span style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
+                        Đang chọn: <strong>{modalTotalRequested}</strong>/{modalRemainingSeats} chỗ trống
+                      </span>
+                    </div>
+
+                    <div style={{ border: '1px solid #E2E8F0', borderRadius: '10px', overflow: 'hidden', background: '#FFFFFF' }}>
+                      {/* NGƯỜI LỚN */}
+                      <div style={{ padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #F1F5F9' }}>
+                        <div>
+                          <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+                            Người lớn <span style={{ fontSize: '12px', fontWeight: 500, color: '#64748B' }}>(Từ 12 tuổi)</span>
+                          </div>
+                          <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {activePromo ? (
+                              <>
+                                <span style={{ fontSize: '13px', fontWeight: 700, color: '#BE123C' }}>
+                                  {vnd(activePromo.GiaNguoiLonKM)}/khách
+                                </span>
+                                <span style={{ fontSize: '11.5px', color: '#94A3B8', textDecoration: 'line-through' }}>
+                                  {vnd(selectedTour.GiaNguoiLon)}
+                                </span>
+                              </>
+                            ) : (
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>
+                                {vnd(selectedTour.GiaNguoiLon)}/khách
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #CBD5E1', borderRadius: '8px', background: '#F8FAFC', padding: '2px' }}>
+                          <button
+                            type="button"
+                            disabled={adults <= 1}
+                            onClick={() => {
+                              const val = Math.max(1, adults - 1);
+                              setAdults(val);
+                              syncPassengersCount(val, children);
+                            }}
+                            style={{ width: '30px', height: '30px', borderRadius: '6px', border: 'none', background: adults <= 1 ? 'transparent' : '#FFFFFF', color: adults <= 1 ? '#94A3B8' : '#0F172A', fontWeight: 700, fontSize: '15px', cursor: adults <= 1 ? 'not-allowed' : 'pointer' }}
+                          >
+                            −
+                          </button>
+                          <span style={{ minWidth: '34px', textAlign: 'center', fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+                            {adults}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={modalTotalRequested >= modalRemainingSeats}
+                            onClick={() => {
+                              if (modalTotalRequested >= modalRemainingSeats) return;
+                              const val = adults + 1;
+                              setAdults(val);
+                              syncPassengersCount(val, children);
+                            }}
+                            style={{ width: '30px', height: '30px', borderRadius: '6px', border: 'none', background: modalTotalRequested >= modalRemainingSeats ? 'transparent' : '#FFFFFF', color: modalTotalRequested >= modalRemainingSeats ? '#94A3B8' : '#0F172A', fontWeight: 700, fontSize: '15px', cursor: modalTotalRequested >= modalRemainingSeats ? 'not-allowed' : 'pointer' }}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* TRẺ EM */}
+                      <div style={{ padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+                            Trẻ em <span style={{ fontSize: '12px', fontWeight: 500, color: '#64748B' }}>(2 – 11 tuổi)</span>
+                          </div>
+                          <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {activePromo ? (
+                              <>
+                                <span style={{ fontSize: '13px', fontWeight: 700, color: '#BE123C' }}>
+                                  {vnd(activePromo.GiaTreEmKM)}/khách
+                                </span>
+                                <span style={{ fontSize: '11.5px', color: '#94A3B8', textDecoration: 'line-through' }}>
+                                  {vnd(selectedTour.GiaTreEm)}
+                                </span>
+                              </>
+                            ) : (
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>
+                                {vnd(selectedTour.GiaTreEm)}/khách
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #CBD5E1', borderRadius: '8px', background: '#F8FAFC', padding: '2px' }}>
+                          <button
+                            type="button"
+                            disabled={children <= 0}
+                            onClick={() => {
+                              const val = Math.max(0, children - 1);
+                              setChildren(val);
+                              syncPassengersCount(adults, val);
+                            }}
+                            style={{ width: '30px', height: '30px', borderRadius: '6px', border: 'none', background: children <= 0 ? 'transparent' : '#FFFFFF', color: children <= 0 ? '#94A3B8' : '#0F172A', fontWeight: 700, fontSize: '15px', cursor: children <= 0 ? 'not-allowed' : 'pointer' }}
+                          >
+                            −
+                          </button>
+                          <span style={{ minWidth: '34px', textAlign: 'center', fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+                            {children}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={modalTotalRequested >= modalRemainingSeats}
+                            onClick={() => {
+                              if (modalTotalRequested >= modalRemainingSeats) return;
+                              const val = children + 1;
+                              setChildren(val);
+                              syncPassengersCount(adults, val);
+                            }}
+                            style={{ width: '30px', height: '30px', borderRadius: '6px', border: 'none', background: modalTotalRequested >= modalRemainingSeats ? 'transparent' : '#FFFFFF', color: modalTotalRequested >= modalRemainingSeats ? '#94A3B8' : '#0F172A', fontWeight: 700, fontSize: '15px', cursor: modalTotalRequested >= modalRemainingSeats ? 'not-allowed' : 'pointer' }}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* TẠM TÍNH & NÚT TIẾP TỤC BƯỚC 2 */}
+                  <div style={{ background: '#F8FAFC', padding: '12px 14px', borderRadius: '10px', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', color: '#475569', fontWeight: 600 }}>
+                      Tạm tính ({adults} người lớn{children > 0 ? `, ${children} trẻ em` : ''}):
+                    </span>
+                    <strong style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A' }}>{vnd(currentSubtotal)}</strong>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isModalSoldOut || isModalOverCapacity}
+                    onClick={() => setBookingStep(2)}
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: isModalSoldOut || isModalOverCapacity ? '#CBD5E1' : '#0F172A',
+                      color: isModalSoldOut || isModalOverCapacity ? '#64748B' : '#FFFFFF',
+                      fontWeight: 700,
+                      fontSize: '13.5px',
+                      cursor: isModalSoldOut || isModalOverCapacity ? 'not-allowed' : 'pointer',
+                    }}
                   >
-                    {selectedTour.LichKhoiHanh && selectedTour.LichKhoiHanh.length > 0 ? (
-                      selectedTour.LichKhoiHanh.map((l) => (
-                        <option key={l.LichID} value={l.LichID}>
-                          {l.MaLich} — Khởi hành {new Date(l.NgayKhoiHanh).toLocaleDateString('vi-VN')} (Còn {l.SoChoToiDa - l.SoChoDaDat} chỗ)
-                        </option>
-                      ))
-                    ) : (
-                      <option value={selectedTour.TourID}>LICH-OCT15 — Khởi hành 15/10/2026 (Còn 25 chỗ)</option>
-                    )}
-                  </select>
+                    {isModalSoldOut
+                      ? 'Đợt khởi hành này đã hết chỗ hoặc đã qua ngày'
+                      : isModalOverCapacity
+                      ? `Vượt quá số chỗ còn trống (${modalRemainingSeats} chỗ)`
+                      : 'Tiếp tục: Kê khai thông tin hành khách →'}
+                  </button>
                 </div>
+              );
+            })()}
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                  <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
-                      <label style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>Người lớn</label>
-                      <span style={{ fontSize: '12px', color: '#0284C7', fontWeight: 700 }}>{vnd(selectedTour.GiaNguoiLon)}/khách</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const val = Math.max(1, adults - 1);
-                          setAdults(val);
-                          syncPassengersCount(val, children);
-                        }}
-                        style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #CBD5E1', background: '#FFF', fontWeight: 800, cursor: 'pointer' }}
-                      >
-                        -
-                      </button>
-                      <input
-                        className="input"
-                        type="number"
-                        min={1}
-                        value={adults}
-                        onChange={(e) => {
-                          const val = Math.max(1, Number(e.target.value));
-                          setAdults(val);
-                          syncPassengersCount(val, children);
-                        }}
-                        style={{ textAlign: 'center', fontWeight: 800, flex: 1 }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const val = adults + 1;
-                          setAdults(val);
-                          syncPassengersCount(val, children);
-                        }}
-                        style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #CBD5E1', background: '#FFF', fontWeight: 800, cursor: 'pointer' }}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
-                  <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
-                      <div>
-                        <label style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>Trẻ em</label>
-                        <span style={{ fontSize: '10.5px', color: '#64748B', display: 'block' }}>(2 - 11 tuổi)</span>
-                      </div>
-                      <span style={{ fontSize: '12px', color: '#0284C7', fontWeight: 700 }}>{vnd(selectedTour.GiaTreEm)}/khách</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const val = Math.max(0, children - 1);
-                          setChildren(val);
-                          syncPassengersCount(adults, val);
-                        }}
-                        style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #CBD5E1', background: '#FFF', fontWeight: 800, cursor: 'pointer' }}
-                      >
-                        -
-                      </button>
-                      <input
-                        className="input"
-                        type="number"
-                        min={0}
-                        value={children}
-                        onChange={(e) => {
-                          const val = Math.max(0, Number(e.target.value));
-                          setChildren(val);
-                          syncPassengersCount(adults, val);
-                        }}
-                        style={{ textAlign: 'center', fontWeight: 800, flex: 1 }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const val = children + 1;
-                          setChildren(val);
-                          syncPassengersCount(adults, val);
-                        }}
-                        style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #CBD5E1', background: '#FFF', fontWeight: 800, cursor: 'pointer' }}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '13px', color: '#64748B' }}>Tạm tính vé:</span>
-                  <strong style={{ fontSize: '18px', color: '#0284C7' }}>{vnd(currentSubtotal)}</strong>
-                </div>
-
-                <button
-                  className="btn btn-primary"
-                  onClick={() => setBookingStep(2)}
-                  style={{ width: '100%', padding: '12px', background: '#0284C7', borderColor: '#0284C7', fontWeight: 800 }}
-                >
-                  Tiếp Tục: Nhập Thông Tin Hành Khách →
-                </button>
-              </div>
-            )}
-
-            {/* BƯỚC 2: DANH SÁCH HÀNH KHÁCH (CCCD 12 SỐ CHUẨN ĐỀ TÀI) */}
+            {/* BƯỚC 2: DANH SÁCH HÀNH KHÁCH (RÀNG BUỘC CHẶT CHẼ HỌ TÊN + 12 SỐ CCCD NGAY TẠI BƯỚC NÀY) */}
             {bookingStep === 2 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ fontSize: '12.5px', color: '#64748B' }}>
-                  Vui lòng nhập Họ tên và số <strong>CCCD (12 số)</strong> của các hành khách đi tour (bắt buộc theo quy định lữ hành & hàng không):
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: '12.5px', color: '#334155', lineHeight: 1.45 }}>
+                    Bắt buộc điền đầy đủ <strong>Họ và tên</strong> và <strong>Số CCCD/Định danh (đúng 12 chữ số)</strong> cho từng hành khách để xuất vé điện tử & bảo hiểm.
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      background: isModalPassengersValid ? '#ECFDF5' : '#FFF1F2',
+                      color: isModalPassengersValid ? '#047857' : '#BE123C',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isModalPassengersValid
+                      ? `Đã hợp lệ (${passengers.length}/${passengers.length} khách)`
+                      : `Chưa đủ thông tin (${passengers.filter((p) => p.hoTen.trim().length >= 2 && /^\d{12}$/.test(p.cccd.trim())).length}/${passengers.length})`}
+                  </span>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '320px', overflowY: 'auto' }}>
-                  {passengers.map((p, idx) => (
-                    <div key={idx} style={{ background: '#F8FAFC', padding: '12px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                      <div style={{ fontSize: '12px', fontWeight: 800, color: '#005BAA', marginBottom: '6px' }}>
-                        Hành khách {idx + 1} ({p.loaiKhach})
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '8px', marginBottom: '6px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '330px', overflowY: 'auto', paddingRight: '2px' }}>
+                  {passengers.map((p, idx) => {
+                    const nameOk = p.hoTen.trim().length >= 2;
+                    const cccdClean = p.cccd.trim();
+                    const cccdOk = /^\d{12}$/.test(cccdClean);
+                    const isDup = cccdOk && duplicateModalCccds.has(cccdClean);
+                    const rowValid = nameOk && cccdOk && !isDup;
+
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          background: '#FFFFFF',
+                          padding: '12px 14px',
+                          borderRadius: '10px',
+                          border: rowValid ? '1px solid #CBD5E1' : '1px solid #FDA4AF',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#0F172A' }}>
+                            Hành khách {idx + 1} • {p.loaiKhach === 'Nguoi lon' ? 'Người lớn' : 'Trẻ em'}
+                          </span>
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: rowValid ? '#047857' : '#BE123C' }}>
+                            {rowValid
+                              ? '✓ Đã hợp lệ'
+                              : !nameOk
+                              ? 'Cần nhập Họ tên'
+                              : isDup
+                              ? 'Trùng số CCCD'
+                              : `CCCD: ${cccdClean.length}/12 số`}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '8px', marginBottom: '8px' }}>
+                          <input
+                            className="input"
+                            placeholder="Họ và tên đầy đủ trên giấy tờ *"
+                            value={p.hoTen}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setPassengers((prev) => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], hoTen: val };
+                                return next;
+                              });
+                            }}
+                            style={{ fontSize: '13px', padding: '8px 10px' }}
+                          />
+                          <select
+                            className="select"
+                            value={p.gioiTinh}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setPassengers((prev) => {
+                                const next = [...prev];
+                                next[idx] = { ...next[idx], gioiTinh: val };
+                                return next;
+                              });
+                            }}
+                            style={{ fontSize: '13px', padding: '8px 10px' }}
+                          >
+                            <option value="Nam">Nam</option>
+                            <option value="Nu">Nữ</option>
+                          </select>
+                        </div>
+
                         <input
                           className="input"
-                          placeholder="Họ và tên..."
-                          value={p.hoTen}
+                          placeholder="Số CCCD / Mã định danh cá nhân (đúng 12 chữ số) *"
+                          maxLength={12}
+                          value={p.cccd}
                           onChange={(e) => {
-                            const val = e.target.value;
+                            const val = e.target.value.replace(/\D/g, '').slice(0, 12);
                             setPassengers((prev) => {
                               const next = [...prev];
-                              next[idx].hoTen = val;
+                              next[idx] = { ...next[idx], cccd: val };
                               return next;
                             });
+                          }}
+                          style={{
+                            width: '100%',
+                            fontSize: '13px',
+                            padding: '8px 10px',
+                            fontFamily: 'monospace',
+                            letterSpacing: '0.5px',
+                            borderColor: cccdClean.length > 0 && (!cccdOk || isDup) ? '#F43F5E' : undefined,
                           }}
                         />
-                        <select
-                          className="select"
-                          value={p.gioiTinh}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setPassengers((prev) => {
-                              const next = [...prev];
-                              next[idx].gioiTinh = val;
-                              return next;
-                            });
-                          }}
-                        >
-                          <option value="Nam">Nam</option>
-                          <option value="Nu">Nữ</option>
-                        </select>
+                        {isDup && (
+                          <div style={{ fontSize: '11.5px', color: '#BE123C', marginTop: '4px', fontWeight: 600 }}>
+                            Số CCCD này đang bị trùng với một hành khách khác trong cùng đoàn.
+                          </div>
+                        )}
                       </div>
-                      <input
-                        className="input"
-                        placeholder="Số CCCD 12 số (người lớn)..."
-                        maxLength={12}
-                        value={p.cccd}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, '');
-                          setPassengers((prev) => {
-                            const next = [...prev];
-                            next[idx].cccd = val;
-                            return next;
-                          });
-                        }}
-                        style={{ width: '100%', fontSize: '12.5px' }}
-                      />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button className="btn btn-outline" onClick={() => setBookingStep(1)}>← Quay lại</button>
+                {!isModalPassengersValid && (
+                  <div style={{ fontSize: '12px', color: '#BE123C', background: '#FFF1F2', border: '1px solid #FECDD3', padding: '8px 12px', borderRadius: '8px', fontWeight: 600 }}>
+                    Vui lòng hoàn tất đầy đủ Họ tên và đúng 12 chữ số CCCD/Định danh cho toàn bộ {passengers.length} hành khách trước khi chuyển sang bước thanh toán.
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
                   <button
-                    className="btn btn-primary"
-                    onClick={() => setBookingStep(3)}
-                    style={{ flex: 1, background: '#005BAA', fontWeight: 800 }}
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => setBookingStep(1)}
+                    style={{ padding: '11px 16px', fontSize: '13px', fontWeight: 600 }}
                   >
-                    Tiếp Tục: Mã Giảm Giá & Thanh Toán →
+                    ← Quay lại
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!isModalPassengersValid}
+                    onClick={() => {
+                      if (!isModalPassengersValid) return;
+                      setBookingStep(3);
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '11px 16px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: isModalPassengersValid ? '#0F172A' : '#CBD5E1',
+                      color: isModalPassengersValid ? '#FFFFFF' : '#64748B',
+                      fontWeight: 700,
+                      fontSize: '13.5px',
+                      cursor: isModalPassengersValid ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    Tiếp tục: Áp dụng ưu đãi & Xác nhận →
                   </button>
                 </div>
               </div>
@@ -968,26 +1516,50 @@ export default function CustomerHomePage() {
             {/* BƯỚC 3: MÃ GIẢM GIÁ VÀ XÁC NHẬN */}
             {bookingStep === 3 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {/* Ô NHẬP VOUCHER */}
+                {/* Ô NHẬP VOUCHER & GỢI Ý NHANH */}
                 <div>
-                  <label style={{ fontSize: '12.5px', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
-                    Áp Dụng Mã Ưu Đãi (Voucher)
+                  <label style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: '6px' }}>
+                    Mã giảm giá (Voucher)
                   </label>
+                  {activeVouchersStrip.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                      {activeVouchersStrip.map((v) => (
+                        <button
+                          key={v.code}
+                          type="button"
+                          onClick={() => setVoucherCode(v.code)}
+                          style={{
+                            padding: '4px 9px',
+                            borderRadius: '6px',
+                            border: voucherCode === v.code ? '1px solid #0F172A' : '1px solid #CBD5E1',
+                            background: voucherCode === v.code ? '#0F172A' : '#F8FAFC',
+                            color: voucherCode === v.code ? '#FFFFFF' : '#334155',
+                            fontSize: '11.5px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <strong>{v.code}</strong> • {v.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input
                       className="input"
-                      placeholder="Nhập VIETTOUR2026 hoặc BAYHE2026..."
+                      placeholder="Nhập mã ưu đãi..."
                       value={voucherCode}
-                      onChange={(e) => setVoucherCode(e.target.value)}
-                      style={{ flex: 1, textTransform: 'uppercase', fontWeight: 800 }}
+                      onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                      style={{ flex: 1, textTransform: 'uppercase', fontWeight: 700, fontSize: '13px' }}
                     />
                     <button
+                      type="button"
                       className="btn btn-outline"
                       onClick={handleApplyVoucher}
                       disabled={validatingVoucher}
-                      style={{ fontWeight: 800 }}
+                      style={{ fontWeight: 700, fontSize: '13px' }}
                     >
-                      {validatingVoucher ? 'Kiểm tra...' : 'Áp Dụng'}
+                      {validatingVoucher ? 'Đang kiểm tra...' : 'Áp dụng'}
                     </button>
                   </div>
 
@@ -1039,157 +1611,185 @@ export default function CustomerHomePage() {
       )}
 
       {/* ========================================================================= */}
-      {/* 5. MODAL THANH TOÁN VIETQR & VNPAY NGAY SAU KHI ĐẶT THÀNH CÔNG */}
+      {/* 5. MODAL THANH TOÁN VNPAY & GIỮ CHỖ TẠI QUẦY NGAY SAU KHI ĐẶT TOUR */}
       {/* ========================================================================= */}
       {createdBooking && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', zIndex: 1200,
+          position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.72)', zIndex: 1200,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
         }}>
-          <div style={{ maxWidth: '500px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', padding: '24px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
+          <div style={{ maxWidth: '500px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: '12px', background: '#FFFFFF', padding: '24px 26px', border: '1px solid #E2E8F0', boxShadow: '0 20px 45px rgba(15, 23, 42, 0.18)' }}>
             <div style={{ textAlign: 'center', marginBottom: '16px' }}>
               <div style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--emerald-50)',
-                color: 'var(--emerald-600)',
+                width: '40px',
+                height: '40px',
+                borderRadius: '8px',
+                background: '#F8FAFC',
+                color: '#0F172A',
                 display: 'grid',
                 placeItems: 'center',
                 margin: '0 auto 10px',
-                border: '1px solid var(--emerald-200)',
+                border: '1px solid #CBD5E1',
               }}>
-                <CheckCircle2 size={24} strokeWidth={1.5} />
+                <CheckCircle2 size={20} strokeWidth={1.8} />
               </div>
-              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--zinc-900)', margin: 0, letterSpacing: '-0.3px' }}>
-                ĐẶT TOUR THÀNH CÔNG
+              <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.2px' }}>
+                ĐÃ GHI NHẬN YÊU CẦU ĐẶT TOUR
               </h3>
-              <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                Mã đơn hàng: <strong style={{ color: 'var(--zinc-900)', fontSize: '14px' }}>{createdBooking.MaDon}</strong>
+              <p style={{ fontSize: '12.5px', color: '#64748B', margin: '4px 0 0' }}>
+                Mã đơn đặt chỗ: <strong style={{ color: '#0F172A', fontSize: '13.5px', fontFamily: 'monospace' }}>{createdBooking.MaDon}</strong> • Trạng thái: <strong>Chờ thanh toán</strong>
               </p>
             </div>
 
-            <div style={{ textAlign: 'center', background: '#F8FAFC', padding: '12px', borderRadius: '10px', marginBottom: '16px' }}>
-              <div style={{ fontSize: '12.5px', color: '#64748B' }}>Số tiền thanh toán:</div>
-              <div style={{ fontSize: '24px', fontWeight: 900, color: '#005BAA' }}>{vnd(createdBooking.TongTien)}</div>
+            <div style={{ textAlign: 'center', background: '#F8FAFC', padding: '12px', borderRadius: '8px', border: '1px solid #E2E8F0', marginBottom: '16px' }}>
+              <div style={{ fontSize: '12px', color: '#64748B' }}>Tổng số tiền cần thanh toán:</div>
+              <div style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', marginTop: '2px' }}>{vnd(createdBooking.TongTien)}</div>
             </div>
 
-            {/* TAB CHUYỂN ĐỔI: VNPAY vs TIỀN MẶT/THẺ */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px', background: '#F1F5F9', padding: '4px', borderRadius: '10px' }}>
+            {/* TAB CHUYỂN ĐỔI: CỔNG VNPAY vs THANH TOÁN TẠI QUẦY */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '16px', background: '#F1F5F9', padding: '4px', borderRadius: '8px' }}>
               <button
+                type="button"
                 onClick={() => setPayMethod('VNPAY')}
                 style={{
                   padding: '9px 8px', border: 'none', borderRadius: '6px',
-                  background: payMethod === 'VNPAY' ? '#0284C7' : 'transparent',
-                  color: payMethod === 'VNPAY' ? '#FFF' : '#475569',
+                  background: payMethod === 'VNPAY' ? '#0F172A' : 'transparent',
+                  color: payMethod === 'VNPAY' ? '#FFFFFF' : '#475569',
                   fontWeight: 700, fontSize: '12.5px', cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}
               >
-                Cổng VNPay Trực Tuyến
+                Cổng VNPAY (QR / Thẻ ATM)
               </button>
               <button
+                type="button"
                 onClick={() => setPayMethod('CASH_CARD')}
                 style={{
                   padding: '9px 8px', border: 'none', borderRadius: '6px',
-                  background: payMethod === 'CASH_CARD' ? '#0284C7' : 'transparent',
-                  color: payMethod === 'CASH_CARD' ? '#FFF' : '#475569',
+                  background: payMethod === 'CASH_CARD' ? '#0F172A' : 'transparent',
+                  color: payMethod === 'CASH_CARD' ? '#FFFFFF' : '#475569',
                   fontWeight: 700, fontSize: '12.5px', cursor: 'pointer',
                   transition: 'all 0.15s',
                 }}
               >
-                Tiền mặt / Thẻ tại quầy
+                Thanh toán tại quầy
               </button>
             </div>
 
-            {/* TAB 1: CỔNG VNPAY TRỰC TUYẾN (SANDBOX) */}
+            {/* TAB 1: CỔNG VNPAY TRỰC TUYẾN */}
             {payMethod === 'VNPAY' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  padding: '12px 14px',
+                  background: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '8px',
+                  fontSize: '12.5px',
+                  color: '#475569',
+                  lineHeight: 1.5,
+                }}>
+                  <ShieldCheck size={20} color="#0F172A" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '2px' }}>
+                      Thanh toán trực tuyến qua Cổng VNPAY
+                    </div>
+                    <div>
+                      Hỗ trợ quét mã VNPAY-QR trên ứng dụng Ngân hàng, thẻ ATM nội địa (Napas) và thẻ quốc tế. Ngay sau khi giao dịch thành công, hệ thống sẽ tự động cấp <strong>Vé điện tử &amp; Mã QR soát vé</strong>.
+                    </div>
+                  </div>
+                </div>
+
                 <button
+                  type="button"
                   onClick={() => handlePayVNPay(createdBooking.DonHangID, createdBooking.TongTien, createdBooking.MaDon)}
                   disabled={loadingVnpay}
                   className="btn btn-primary"
                   style={{
-                    width: '100%', padding: '13px', background: '#0284C7', borderColor: '#0284C7',
-                    fontWeight: 700, fontSize: '14.5px', borderRadius: '8px', cursor: 'pointer',
+                    width: '100%', padding: '12px', background: '#0F172A', borderColor: '#0F172A',
+                    fontWeight: 700, fontSize: '13.5px', borderRadius: '8px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                   }}
                 >
-                  {loadingVnpay ? 'Đang kết nối cổng VNPay...' : 'Thanh toán ngay qua Cổng VNPay Sandbox →'}
+                  <Lock size={14} />
+                  {loadingVnpay ? 'Đang kết nối cổng VNPay...' : 'Tiếp tục thanh toán qua VNPAY →'}
                 </button>
-
-                <div style={{
-                  background: '#FEF3C7',
-                  border: '1px solid #FCD34D',
-                  borderRadius: '10px',
-                  padding: '12px 14px',
-                  fontSize: '12px',
-                  color: '#78350F',
-                  lineHeight: 1.5,
-                }}>
-                  <div style={{ fontWeight: 800, marginBottom: '4px' }}>Lưu ý kiểm thử cổng VNPay Sandbox:</div>
-                  <div style={{ marginBottom: '6px' }}>
-                    • Không quét mã QR bằng App Ngân Hàng thật bên ngoài (sẽ báo <em>"Nhà cung cấp không khả dụng"</em> do đây là môi trường thử nghiệm).
-                  </div>
-                  <div>
-                    • Trên giao diện VNPay, chọn mục <strong>"Thẻ nội địa & tài khoản ngân hàng"</strong> → Chọn <strong>NCB</strong> → Nhập thẻ thử nghiệm:
-                    <div style={{ background: '#FFFBEB', padding: '6px 8px', borderRadius: '6px', marginTop: '4px', border: '1px solid #FDE68A' }}>
-                      Số thẻ: <strong>9704198526191432198</strong><br />
-                      Tên chủ thẻ: <strong>NGUYEN VAN A</strong> | Ngày PH: <strong>07/15</strong><br />
-                      Mã OTP: <strong>123456</strong>
-                    </div>
-                  </div>
-                </div>
               </div>
             )}
 
-            {/* TAB 2: TIỀN MẶT / THẺ TẠI QUẦY (GIỮ CHỖ) */}
+            {/* TAB 2: TIỀN MẶT / QUẸT THẺ TẠI QUẦY VÉ */}
             {payMethod === 'CASH_CARD' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div style={{
-                  background: '#F0FDF4',
-                  border: '1px solid #BBF7D0',
-                  borderRadius: '12px',
-                  padding: '16px',
-                  fontSize: '13px',
-                  color: '#166534',
+                  background: '#F8FAFC',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '8px',
+                  padding: '14px 16px',
+                  fontSize: '12.5px',
+                  color: '#334155',
                 }}>
-                  <div style={{ fontWeight: 800, fontSize: '14px', marginBottom: '6px', color: '#15803D' }}>
-                    Đã giữ chỗ thành công (Thời hạn 24 giờ)
+                  <div style={{ fontWeight: 700, fontSize: '13.5px', marginBottom: '6px', color: '#0F172A' }}>
+                    Hướng dẫn thanh toán trực tiếp tại Quầy vé (Giữ chỗ 24 giờ)
                   </div>
-                  <p style={{ margin: '0 0 10px', lineHeight: 1.5 }}>
-                    Chuyến đi của Quý khách đã được bảo lưu trên hệ thống. Quý khách vui lòng hoàn tất thanh toán trước khi thời hạn giữ chỗ kết thúc.
+                  <p style={{ margin: '0 0 10px', lineHeight: 1.5, color: '#475569' }}>
+                    Đơn đặt chỗ <strong>{createdBooking.MaDon}</strong> đang ở trạng thái <strong>Chờ thanh toán</strong>. Quý khách vui lòng cung cấp mã đơn để nộp tiền mặt hoặc quẹt thẻ tại điểm giao dịch trước khi hết hạn giữ chỗ (vé điện tử QR sẽ được kích hoạt ngay sau khi thu ngân xác nhận):
                   </p>
-                  <div style={{ background: '#FFFFFF', padding: '10px 12px', borderRadius: '8px', border: '1px solid #DCFCE7', fontSize: '12.5px', color: '#1E293B', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div>Văn phòng VietTour: <strong>Số 40, Đường số 13, KĐT Vạn Phúc, TP. Hồ Chí Minh</strong></div>
-                    <div>Hình thức hỗ trợ: <strong>Tiền mặt hoặc Quẹt thẻ POS (ATM / Visa / Mastercard)</strong></div>
-                    <div>Hotline hỗ trợ 24/7: <strong style={{ color: '#0284C7' }}>1900 1234</strong></div>
+                  <div style={{ background: '#FFFFFF', padding: '10px 12px', borderRadius: '6px', border: '1px solid #E2E8F0', fontSize: '12px', color: '#1E293B', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                    <div>• <strong>Quầy vé Sân bay:</strong> Ga Quốc Nội, Sân bay Quốc tế Tân Sơn Nhất (45 Trường Sơn, Q. Tân Bình, TP.HCM)</div>
+                    <div>• <strong>Đại lý Phòng vé Trung tâm:</strong> 190 Pasteur, Phường Võ Thị Sáu, Quận 3, TP.HCM</div>
+                    <div>• <strong>Phương thức nhận:</strong> Tiền mặt (VNĐ) hoặc Quẹt thẻ POS ngân hàng</div>
+                    <div>• <strong>Tổng đài hỗ trợ:</strong> <strong style={{ color: '#0F172A' }}>1900 1234</strong> (07:00 – 22:00)</div>
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <Link
-                    href="/portal/my-bookings"
-                    className="btn btn-outline"
-                    style={{ flex: 1, textAlign: 'center', textDecoration: 'none', fontWeight: 700, fontSize: '13px', padding: '10px' }}
-                  >
-                    Xem đơn của tôi
-                  </Link>
                   <button
+                    type="button"
                     onClick={() => setCreatedBooking(null)}
-                    className="btn btn-primary"
-                    style={{ flex: 1, background: '#0F172A', borderColor: '#0F172A', fontWeight: 700, fontSize: '13px', padding: '10px' }}
+                    className="btn btn-outline"
+                    style={{ flex: 1, fontWeight: 600, fontSize: '13px', padding: '10px' }}
                   >
-                    Hoàn tất
+                    Đóng
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loadingVnpay}
+                    onClick={async () => {
+                      try {
+                        setLoadingVnpay(true);
+                        await api(`/bookings/${createdBooking.DonHangID}/request-cash`, {
+                          method: 'POST',
+                          body: JSON.stringify({
+                            ghiChu: `Khách xác nhận nộp tiền mặt tại quầy giao dịch VietTour cho đơn ${createdBooking.MaDon}`,
+                          }),
+                        });
+                        alert(
+                          `Đã ghi nhận đăng ký thanh toán tiền mặt tại quầy cho đơn ${createdBooking.MaDon}! Sau khi thu ngân/Admin xác nhận đã thu, trạng thái đơn sẽ chuyển sang "Đã thanh toán".`,
+                        );
+                        window.location.href = '/portal/my-bookings';
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : 'Không thể xác nhận thanh toán tại quầy');
+                      } finally {
+                        setLoadingVnpay(false);
+                      }
+                    }}
+                    className="btn btn-primary"
+                    style={{
+                      flex: 2,
+                      background: '#0F172A',
+                      borderColor: '#0F172A',
+                      fontWeight: 700,
+                      fontSize: '13px',
+                      padding: '10px',
+                    }}
+                  >
+                    {loadingVnpay ? 'Đang ghi nhận...' : 'Xác nhận thanh toán tiền mặt tại quầy'}
                   </button>
                 </div>
               </div>
             )}
-
-            <div style={{ marginTop: '14px', textAlign: 'center' }}>
-              <Link href={`/portal/ticket/${createdBooking.MaDon}`} style={{ fontSize: '13px', color: '#005BAA', fontWeight: 700 }}>
-                Xem trước vé điện tử Boarding Pass →
-              </Link>
-            </div>
           </div>
         </div>
       )}
@@ -1268,18 +1868,18 @@ export default function CustomerHomePage() {
             </div>
           </div>
 
-          <div style={{ background: '#F0F9FF', borderRadius: '16px', padding: '24px 28px', border: '1px solid #BAE6FD', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          <div style={{ background: '#F8FAFC', borderRadius: '12px', padding: '22px 26px', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
             <div>
-              <div style={{ fontSize: '15px', fontWeight: 800, color: '#0369A1' }}>Trụ sở điều hành VietTour tại Việt Nam</div>
-              <div style={{ fontSize: '13.5px', color: '#475569', marginTop: '4px' }}>Số 40, Đường số 13, Khu Đô Thị Vạn Phúc, TP. Thủ Đức, TP. Hồ Chí Minh</div>
-              <div style={{ fontSize: '12.5px', color: '#64748B', marginTop: '2px' }}>Giấy phép kinh doanh lữ hành quốc tế số: 79-1234/2020/TCDL-GP LHQT</div>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A' }}>Hệ thống Phòng vé &amp; Quầy giao dịch VietTour</div>
+              <div style={{ fontSize: '13.5px', color: '#334155', marginTop: '4px' }}>Quầy giao dịch Sân bay: Ga Quốc Nội, Sân bay Quốc tế Tân Sơn Nhất (45 Trường Sơn, Q. Tân Bình, TP.HCM)</div>
+              <div style={{ fontSize: '13px', color: '#475569', marginTop: '2px' }}>Đại lý Phòng vé Trung tâm: 190 Pasteur, Phường Võ Thị Sáu, Quận 3, TP.HCM • GP LHQT: 79-1234/2020/TCDL</div>
             </div>
             <Link
               href="/portal/policy"
               className="btn btn-primary"
-              style={{ padding: '10px 20px', background: '#0284C7', borderColor: '#0284C7', fontWeight: 700, fontSize: '13.5px', textDecoration: 'none' }}
+              style={{ padding: '10px 18px', background: '#0F172A', borderColor: '#0F172A', fontWeight: 600, fontSize: '13px', textDecoration: 'none' }}
             >
-              Xem Chính Sách Hoàn Hủy & Bảo Vệ Khách Hàng →
+              Chính sách Hoàn hủy &amp; Bảo vệ khách hàng →
             </Link>
           </div>
         </div>
