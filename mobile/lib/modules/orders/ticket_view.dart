@@ -161,10 +161,7 @@ class TicketView extends GetView<TicketController> {
         if (myIdx < 0) myIdx = 0;
 
         final myPassenger = passengers.isNotEmpty ? passengers[myIdx] : null;
-        final lanIp = order['lanIp']?.toString();
-        final hostForQr = (lanIp != null && lanIp.isNotEmpty)
-            ? 'http://$lanIp:3000'
-            : 'http://localhost:3000';
+        const hostForQr = 'https://viettour-frontend.onrender.com';
         final qrDataUrl = myPassenger != null
             ? '$hostForQr/portal/ticket/$maDon?khach=${myPassenger['ChiTietID']}'
             : '$hostForQr/portal/ticket/$maDon';

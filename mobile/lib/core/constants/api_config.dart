@@ -10,13 +10,7 @@ abstract final class ApiConfig {
     if (configured.isNotEmpty) {
       return configured.replaceFirst(RegExp(r'/+$'), '');
     }
-    if (kReleaseMode) {
-      return 'https://viettour-backend.onrender.com/api';
-    }
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:4000/api';
-    }
-    return 'http://localhost:4000/api';
+    return 'https://viettour-backend.onrender.com/api';
   }
 
   static String get tours => '$baseUrl/tours';

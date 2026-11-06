@@ -13,6 +13,7 @@ class CustomerBookingModel {
     required this.adults,
     required this.children,
     required this.tour,
+    this.hasReviewed = false,
   });
 
   final int id;
@@ -26,12 +27,18 @@ class CustomerBookingModel {
   final int adults;
   final int children;
   final TourModel tour;
+  final bool hasReviewed;
 
   bool get isPaid => status == 'Da thanh toan' || status == 'Hoan thanh';
   bool get canPay =>
       (status == 'Cho thanh toan' || status == 'Da dat coc') && !isPaid;
-  bool get canCancel => status == 'Cho thanh toan' && !isPaid;
-  bool get canReview => status == 'Da thanh toan' || status == 'Hoan thanh';
+  bool get canCancel =>
+      status != 'Da huy' &&
+      status != 'Hoan thanh' &&
+      !hasReviewed &&
+      (status == 'Cho thanh toan' || departureDate.isAfter(DateTime.now()));
+  bool get canReview =>
+      (status == 'Da thanh toan' || status == 'Hoan thanh') && !hasReviewed;
 
   String get statusLabel => switch (status) {
     'Cho thanh toan' => 'Chờ thanh toán',
@@ -51,8 +58,17 @@ class CustomerBookingModel {
         ? null
         : payments.first as Map<String, dynamic>;
     final rawStatus = json['TrangThaiDon'] as String? ?? '';
+    final reviews = json['DanhGia'] as List<dynamic>? ?? const [];
+    final passengers = json['ChiTietHanhKhach'] as List<dynamic>? ?? const [];
+    final hasReviewed = reviews.isNotEmpty;
+    final hasCheckedIn = passengers.any(
+      (p) => p is Map && (p['TrangThaiDiemDanh'] == 1 || p['TrangThaiDiemDanh'] == '1'),
+    );
+    final effectiveStatus = (rawStatus != 'Da huy' && (hasReviewed || hasCheckedIn))
+        ? 'Hoan thanh'
+        : rawStatus;
     final netTotal = _toInt(json['TongTien']) - _toInt(json['GiamGia']);
-    final isOrderPaid = rawStatus == 'Da thanh toan' || rawStatus == 'Hoan thanh';
+    final isOrderPaid = effectiveStatus == 'Da thanh toan' || effectiveStatus == 'Hoan thanh';
     final paidAmount = isOrderPaid ? netTotal : _toInt(json['TienCoc']);
     final amountDue = isOrderPaid
         ? 0
@@ -70,7 +86,7 @@ class CustomerBookingModel {
     return CustomerBookingModel(
       id: (json['DonHangID'] as num).toInt(),
       code: json['MaDon'] as String? ?? '',
-      status: rawStatus,
+      status: effectiveStatus,
       paymentStatus: paymentStatus,
       total: netTotal,
       paidAmount: paidAmount,
@@ -79,6 +95,7 @@ class CustomerBookingModel {
       adults: (json['SoLuongNguoiLon'] as num?)?.toInt() ?? 0,
       children: (json['SoLuongTreEm'] as num?)?.toInt() ?? 0,
       tour: TourModel.fromJson(tourJson),
+      hasReviewed: hasReviewed,
     );
   }
 
