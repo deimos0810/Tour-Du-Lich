@@ -10,6 +10,7 @@ import * as nodemailer from 'nodemailer';
 import * as os from 'os';
 import { PrismaService } from '../prisma/prisma.module.js';
 import { hashPassword, isHashed, validatePasswordStrength, verifyPassword } from '../common/password.js';
+import { evaluateVoucher } from '../common/promotion.js';
 
 function getLocalLanIp(): string | null {
   try {
@@ -29,8 +30,9 @@ function getLocalLanIp(): string | null {
   }
 }
 
-// In-memory store cho mã OTP lấy lại mật khẩu: Key là Email, Value là { code, expiresAt }
-const otpStore = new Map<string, { code: string; expiresAt: number }>();
+// In-memory store cho mã OTP lấy lại mật khẩu: Key là Email, Value là { code, expiresAt, attempts }
+const otpStore = new Map<string, { code: string; expiresAt: number; attempts: number }>();
+const MAX_OTP_ATTEMPTS = 5;
 
 @Injectable()
 export class AuthService {
@@ -157,8 +159,15 @@ export class AuthService {
     };
   }
 
-  /** Chuyển đổi nhanh giữa các tài khoản đã lưu trên thiết bị (Khách hàng ⇄ Hướng dẫn viên ⇄ Admin) */
+  /**
+   * Chuyển đổi nhanh giữa các tài khoản đã lưu trên thiết bị (Khách hàng ⇄ Hướng dẫn viên ⇄ Admin).
+   * Chỉ kích hoạt ở môi trường Development/Sandbox để phục vụ chạy Demo bảo vệ khóa luận;
+   * tự động vô hiệu hóa trên môi trường Production.
+   */
   async quickSwitchAccount(email: string) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new BadRequestException('Tính năng chuyển nhanh tài khoản Demo đã bị khóa trên môi trường Production!');
+    }
     if (!email || !email.trim()) {
       throw new BadRequestException('Vui lòng chọn tài khoản cần chuyển đổi');
     }
@@ -311,7 +320,7 @@ export class AuthService {
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + 5 * 60 * 1000; // Mã có hiệu lực trong 5 phút
 
-    otpStore.set(email, { code: otpCode, expiresAt });
+    otpStore.set(email, { code: otpCode, expiresAt, attempts: 0 });
 
     const mailUser = (process.env.MAIL_USER || 'luongthanh1152011@gmail.com').trim();
     const fromName = process.env.MAIL_FROM_NAME || 'VietTour Security';
@@ -378,7 +387,13 @@ export class AuthService {
     }
 
     if (record.code !== dto.otp) {
-      throw new BadRequestException('Mã OTP không chính xác!');
+      record.attempts += 1;
+      if (record.attempts >= MAX_OTP_ATTEMPTS) {
+        otpStore.delete(dto.email);
+        throw new BadRequestException('Bạn đã nhập sai OTP quá 5 lần! Mã OTP đã bị hủy để bảo mật, vui lòng yêu cầu mã mới.');
+      }
+      otpStore.set(dto.email, record);
+      throw new BadRequestException(`Mã OTP không chính xác! Bạn còn ${MAX_OTP_ATTEMPTS - record.attempts} lần thử.`);
     }
 
     const pwErr = validatePasswordStrength(dto.newPassword);
@@ -414,6 +429,7 @@ export class AuthService {
     lichId: number;
     soLuongNguoiLon: number;
     soLuongTreEm: number;
+    soPhongDon?: number;
     ghiChu?: string;
     maKhuyenMai?: string;
     hanhKhach?: Array<{
@@ -449,7 +465,9 @@ export class AuthService {
 
       const giaNL = Number(lich.GiaTourKhuyenMai || lich.Tour.GiaNguoiLon);
       const giaTE = Number(lich.Tour.GiaTreEm);
-      const tongTien = giaNL * dto.soLuongNguoiLon + giaTE * dto.soLuongTreEm;
+      const soPhongDon = Math.max(0, Number(dto.soPhongDon || 0));
+      const tienPhuThuPhongDon = soPhongDon * Number(lich.Tour.PhuThuPhongDon || 0);
+      const tongTien = giaNL * dto.soLuongNguoiLon + giaTE * dto.soLuongTreEm + tienPhuThuPhongDon;
       const maDon = `BK-${Date.now().toString().slice(-6)}${Math.floor(10 + Math.random() * 90)}`;
 
       // 1. Kiểm tra Khuyến mãi tour (CTKM) đang diễn ra theo thời gian thực
@@ -471,29 +489,16 @@ export class AuthService {
         giamGiaKM = Math.round((tongTien * Number(ctkm.PhanTramGiam)) / 100);
       }
 
-      // 2. Kiểm tra và áp dụng mã Voucher nhập tay nếu có (tính trên tiền sau CTKM tour)
+      // 2. Kiểm tra và áp dụng mã Voucher nhập tay nếu có (khóa dòng Voucher chống vượt SoLuongToiDa)
       let giamGiaVoucher = 0;
       let voucherId: number | null = null;
       const tienSauKM = Math.max(tongTien - giamGiaKM, 0);
-      if (dto.maKhuyenMai) {
-        const vc = await tx.voucher.findUnique({
-          where: { MaVoucher: dto.maKhuyenMai },
-          include: { ApDungVoucher: true },
-        });
-        if (
-          vc &&
-          vc.TrangThai === 1 &&
-          now >= vc.NgayBatDau &&
-          now <= vc.NgayKetThuc &&
-          tienSauKM >= Number(vc.GiaTriDonToiThieu) &&
-          (vc.ApDungVoucher.length === 0 || vc.ApDungVoucher.some((a) => a.TourID === lich.TourID))
-        ) {
-          giamGiaVoucher = Math.min(
-            Math.round((tienSauKM * Number(vc.PhanTramGiam)) / 100),
-            Number(vc.GiamToiDa),
-          );
-          voucherId = vc.VoucherID;
-        }
+      if (dto.maKhuyenMai && dto.maKhuyenMai.trim()) {
+        const cleanCode = dto.maKhuyenMai.trim().toUpperCase();
+        await tx.$queryRaw`SELECT voucherid FROM voucher WHERE UPPER(mavoucher) = ${cleanCode} FOR UPDATE`;
+        const vcRes = await evaluateVoucher(tx, cleanCode, tienSauKM, lich.TourID, now);
+        giamGiaVoucher = vcRes.giamGia;
+        voucherId = vcRes.voucherId;
       }
 
       const tongGiamGia = giamGiaKM + giamGiaVoucher;

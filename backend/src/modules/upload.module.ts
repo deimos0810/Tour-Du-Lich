@@ -7,12 +7,16 @@ import {
   Post,
   Query,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { copyFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { extname, join } from 'path';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../common/guards/roles.guard.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
 
 const UPLOAD_DIR = join(process.cwd(), 'uploads', 'tours');
 const FRONTEND_PUBLIC_DIR = join(process.cwd(), '..', 'frontend', 'public', 'uploads', 'tours');
@@ -72,6 +76,8 @@ export class UploadService {
 }
 
 @Controller('upload')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('Admin', 'Dieu hanh')
 export class UploadController {
   constructor(private uploadService: UploadService) {}
 

@@ -1,0 +1,31 @@
+# =============================================================================
+# RENDER BLUEPRINT (100% FREE TIER - KHÔNG CẦN THẺ TÍN DỤNG)
+# Tự động tạo PostgreSQL 16 + Backend NestJS chỉ bằng 1 cú click trên Render.com
+# =============================================================================
+databases:
+  - name: viettour-postgres
+    databaseName: quanlytourdulich
+    user: viettour_admin
+    plan: free
+    region: singapore
+
+services:
+  - type: web
+    name: viettour-backend
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: npm install && npm run build && npx prisma db push
+    startCommand: npm run start:prod
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: viettour-postgres
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000

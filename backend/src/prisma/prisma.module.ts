@@ -1,5 +1,6 @@
 import { Global, Injectable, Logger, Module, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { autoSeedIfEmpty } from './auto-seed.js';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -145,6 +146,12 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       ];
       for (const stmt of alterStatements) {
         await this.$executeRawUnsafe(stmt);
+      }
+
+      // Tự động nạp dữ liệu mẫu 27 bảng nếu Database trên Cloud mới khởi tạo còn trống
+      const seeded = await autoSeedIfEmpty(this);
+      if (seeded) {
+        this.logger.log('Auto-seeded initial VietTour demo data into fresh PostgreSQL database.');
       }
 
       // Tạo hoặc sửa lỗi font dữ liệu mẫu CTKM mặc định bằng Prisma Client (chuẩn UTF-8 100%)

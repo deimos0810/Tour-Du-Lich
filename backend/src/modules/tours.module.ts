@@ -1,7 +1,10 @@
-import { BadRequestException, Body, Controller, Delete, Get, Injectable, Module, NotFoundException, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Injectable, Module, NotFoundException, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.module.js';
 import { decorateToursWithPromo } from '../common/promotion.js';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../common/guards/roles.guard.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
 
 // PHÂN HỆ 2: Quản lý danh mục tour & lịch trình
 @Injectable()
@@ -171,9 +174,21 @@ export class ToursController {
   @Get('categories') categories() { return this.service.categories(); }
   @Get() findAll(@Query() q: Record<string, string>) { return this.service.findAll(q); }
   @Get(':id') findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOne(id); }
-  @Post() create(@Body() body: Record<string, unknown>) { return this.service.create(body); }
-  @Patch(':id') update(@Param('id', ParseIntPipe) id: number, @Body() body: Record<string, unknown>) { return this.service.update(id, body); }
-  @Delete(':id') remove(@Param('id', ParseIntPipe) id: number) { return this.service.remove(id); }
+
+  @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Admin', 'Dieu hanh')
+  create(@Body() body: Record<string, unknown>) { return this.service.create(body); }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Admin', 'Dieu hanh')
+  update(@Param('id', ParseIntPipe) id: number, @Body() body: Record<string, unknown>) { return this.service.update(id, body); }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Admin', 'Dieu hanh')
+  remove(@Param('id', ParseIntPipe) id: number) { return this.service.remove(id); }
 }
 
 @Module({ controllers: [ToursController], providers: [ToursService] })

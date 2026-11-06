@@ -390,13 +390,19 @@ export class BookingsService {
       throw new BadRequestException('Đơn đặt tour chưa hoàn tất thanh toán nên chưa phát hành vé điện tử và không thể điểm danh!');
     }
 
-    const updated = await this.prisma.chiTietHanhKhach.update({
-      where: { ChiTietID: chiTietId },
-      data: { TrangThaiDiemDanh: 1 },
-    });
+    const alreadyCheckedIn = hk.TrangThaiDiemDanh === 1;
+    const updated = alreadyCheckedIn
+      ? hk
+      : await this.prisma.chiTietHanhKhach.update({
+          where: { ChiTietID: chiTietId },
+          data: { TrangThaiDiemDanh: 1 },
+        });
 
     return {
-      message: `Điểm danh thành công cho hành khách ${hk.HoTen}!`,
+      message: alreadyCheckedIn
+        ? `Hành khách ${hk.HoTen} đã được điểm danh trước đó!`
+        : `Điểm danh thành công cho hành khách ${hk.HoTen}!`,
+      alreadyCheckedIn,
       hanhKhach: updated,
       maDon: hk.DonDatTour.MaDon,
     };
@@ -465,21 +471,74 @@ export class BookingsService {
     throw new BadRequestException('Không tìm thấy thông tin vé hợp lệ từ ảnh QR đã tải lên!');
   }
 
-  /** Hủy đơn: hoàn lại số chỗ cho lịch khởi hành (khóa hàng để tránh hủy trùng làm sai số chỗ) và lưu lý do hủy. */
-  async cancel(id: number, lyDoHuy?: string, actorEmail?: string) {
+  /**
+   * Hủy đơn đặt tour:
+   * - Khóa hàng DonDatTour & LichKhoiHanh bằng SELECT ... FOR UPDATE.
+   * - Hoàn trả số chỗ về LichKhoiHanh.SoChoDaDat.
+   * - Tính mức phí phạt hủy tour theo mốc thời gian trước ngày khởi hành (diffDays):
+   *   + Trước >= 15 ngày: Miễn phí (0%), hoàn 100% số tiền đã đóng.
+   *   + Từ 7 đến 14 ngày: Phạt 30% giá trị đơn sau giảm, hoàn phần còn lại.
+   *   + Từ 3 đến 6 ngày: Phạt 60% giá trị đơn sau giảm.
+   *   + Dưới 3 ngày: Phạt 100% giá trị đơn.
+   *   + Nếu Quản trị viên/Điều hành hủy do lý do bất khả kháng của công ty: Phạt 0%, hoàn 100%.
+   */
+  async cancel(id: number, lyDoHuy?: string, actorEmail?: string, actorRoles?: string[]) {
     const reason = String(lyDoHuy || '').trim() || 'Khách hàng hủy đơn trực tuyến';
+    const isStaffCancel = Array.isArray(actorRoles) && actorRoles.some((r) => ['Admin', 'Dieu hanh', 'Ke toan'].includes(r));
 
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT donhangid FROM dondattour WHERE donhangid = ${id} FOR UPDATE`;
-      const current = await tx.donDatTour.findUniqueOrThrow({ where: { DonHangID: id } });
+      const current = await tx.donDatTour.findUniqueOrThrow({
+        where: { DonHangID: id },
+        include: { LichKhoiHanh: true, ThanhToan: true },
+      });
       if (current.TrangThaiDon === 'Da huy') throw new BadRequestException('Đơn đã được hủy trước đó');
       await tx.$queryRaw`SELECT lichid FROM lichkhoihanh WHERE lichid = ${current.LichID} FOR UPDATE`;
 
       const now = new Date();
+      const diffMs = current.LichKhoiHanh.NgayKhoiHanh.getTime() - now.getTime();
+      const diffDays = Math.max(0, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
+
+      // Xác định tỷ lệ phạt hủy theo chính sách hợp đồng lữ hành
+      let tyLePhat = 0;
+      if (!isStaffCancel) {
+        if (diffDays >= 15) tyLePhat = 0;
+        else if (diffDays >= 7) tyLePhat = 30;
+        else if (diffDays >= 3) tyLePhat = 60;
+        else tyLePhat = 100;
+      }
+
+      const giaTriDonSauGiam = Math.max(0, Number(current.TongTien) - Number(current.GiamGia || 0));
+      const daThu = Math.max(
+        current.ThanhToan.filter((t) => t.TrangThai === 'Thanh cong').reduce((s, t) => s + Number(t.SoTien), 0),
+        Number(current.TienCoc || 0),
+      );
+      const phiPhatTheoChinhSach = Math.round((giaTriDonSauGiam * tyLePhat) / 100);
+      const phiPhatThucTe = daThu > 0 ? Math.min(daThu, phiPhatTheoChinhSach) : 0;
+      const soTienHoan = Math.max(0, daThu - phiPhatThucTe);
+
+      // Nếu khách đã đóng tiền và có số tiền được hoàn trả -> tự động ghi nhận giao dịch Hoàn tiền
+      if (soTienHoan > 0) {
+        await tx.thanhToan.create({
+          data: {
+            DonHangID: id,
+            MaGiaoDich: `RF-${Date.now().toString().slice(-8)}`,
+            SoTien: soTienHoan,
+            HinhThucTT: current.PhuongThucTT || 'Chuyen khoan',
+            TrangThai: 'Da hoan tien',
+            GhiChu: `Hoàn tiền hủy tour (${100 - tyLePhat}% - hủy trước ${diffDays} ngày). Phí phạt giữ lại: ${phiPhatThucTe.toLocaleString('vi-VN')} đ`,
+          },
+        });
+      }
+
       const dateStr = now.toLocaleDateString('vi-VN');
       const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
       const actorInfo = actorEmail ? ` (bởi ${actorEmail})` : '';
-      const cancelNote = `[QUẢN TRỊ VIÊN HỦY] ${timeStr} ${dateStr}${actorInfo} - Lý do: ${reason}`;
+      const policyNote = daThu > 0
+        ? ` | Chính sách hủy (trước ${diffDays} ngày, phạt ${tyLePhat}%): Phí giữ lại ${phiPhatThucTe.toLocaleString('vi-VN')}đ, Hoàn trả ${soTienHoan.toLocaleString('vi-VN')}đ`
+        : '';
+      const prefixTag = isStaffCancel ? '[QUẢN TRỊ VIÊN HỦY]' : '[KHÁCH HÀNG HỦY]';
+      const cancelNote = `${prefixTag} ${timeStr} ${dateStr}${actorInfo} - Lý do: ${reason}${policyNote}`;
       const newGhiChu = current.GhiChu ? `${current.GhiChu}\n${cancelNote}` : cancelNote;
 
       const don = await tx.donDatTour.update({
@@ -493,7 +552,16 @@ export class BookingsService {
         where: { LichID: don.LichID },
         data: { SoChoDaDat: { decrement: don.SoLuongNguoiLon + don.SoLuongTreEm } },
       });
-      return don;
+      return {
+        ...don,
+        chinhSachHuy: {
+          soNgayTruocKhoiHanh: diffDays,
+          tyLePhatPhanTram: tyLePhat,
+          daThu,
+          phiPhatGiuLai: phiPhatThucTe,
+          soTienHoanTra: soTienHoan,
+        },
+      };
     });
   }
 
@@ -582,9 +650,9 @@ export class BookingsController {
   cancel(
     @Param('id', ParseIntPipe) id: number,
     @Body('lyDoHuy') lyDoHuy?: string,
-    @Req() req?: { user?: { email?: string } },
+    @Req() req?: { user?: { email?: string; roles?: string[] } },
   ) {
-    return this.service.cancel(id, lyDoHuy, req?.user?.email);
+    return this.service.cancel(id, lyDoHuy, req?.user?.email, req?.user?.roles);
   }
   @Patch(':id/status') @UseGuards(JwtAuthGuard, RolesGuard) @Roles(...STAFF)
   status(@Param('id', ParseIntPipe) id: number, @Body('TrangThaiDon') s: string) { return this.service.updateStatus(id, s); }
