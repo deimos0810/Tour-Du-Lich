@@ -16,7 +16,7 @@ services:
     plan: free
     region: singapore
     rootDir: backend
-    buildCommand: npm install && npm run build && npx prisma db push
+    buildCommand: npm install --include=dev && npm run build && npx prisma db push --accept-data-loss
     startCommand: npm run start:prod
     envVars:
       - key: DATABASE_URL
@@ -29,3 +29,4 @@ services:
         value: production
       - key: PORT
         value: 4000
+

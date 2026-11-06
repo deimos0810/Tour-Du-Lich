@@ -336,3 +336,4 @@ export async function autoSeedIfEmpty(prisma: PrismaClient): Promise<boolean> {
 
   return true;
 }
+
