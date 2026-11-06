@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:4000/api').replace(/\/+$/, '');
+const DEFAULT_BACKEND =
+  process.env.NODE_ENV === 'production'
+    ? 'https://viettour-backend.onrender.com/api'
+    : 'http://127.0.0.1:4000/api';
+const BACKEND_BASE = (process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_BACKEND).replace(/\/+$/, '');
 
 async function proxy(req: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   try {

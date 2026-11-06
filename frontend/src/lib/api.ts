@@ -1,14 +1,19 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 
+const DEFAULT_API_URL =
+  process.env.NODE_ENV === 'production'
+    ? 'https://viettour-backend.onrender.com/api'
+    : 'http://localhost:4000/api';
+
 export function getApiUrl(): string {
   if (typeof window !== 'undefined') {
     return '/api-proxy';
   }
-  return process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
+  return process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
 }
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
 
 function getToken(): string | null {
   return typeof window === 'undefined' ? null : localStorage.getItem('viettour_token');
@@ -102,8 +107,9 @@ export function getImageUrl(url: string | null | undefined): string {
     return trimmed;
   }
   if (trimmed.startsWith('/')) {
-    if (process.env.NEXT_PUBLIC_API_URL) {
-      const origin = process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, '');
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === 'production' ? 'https://viettour-backend.onrender.com/api' : '');
+    if (apiBase) {
+      const origin = apiBase.replace(/\/api\/?$/, '');
       return `${origin}${trimmed}`;
     }
     const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';

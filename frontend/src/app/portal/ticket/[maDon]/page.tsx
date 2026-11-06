@@ -16,7 +16,12 @@ export default async function TicketDetailPage({
 
   let initialTicket: TicketData | null = null;
   try {
-    const res = await fetch(`http://127.0.0.1:4000/api/bookings/ticket/${encodeURIComponent(maDon)}`, {
+    const backendApi =
+      process.env.NEXT_PUBLIC_API_URL ??
+      (process.env.NODE_ENV === 'production'
+        ? 'https://viettour-backend.onrender.com/api'
+        : 'http://127.0.0.1:4000/api');
+    const res = await fetch(`${backendApi.replace(/\/+$/, '')}/bookings/ticket/${encodeURIComponent(maDon)}`, {
       cache: 'no-store',
     });
     if (res.ok) {

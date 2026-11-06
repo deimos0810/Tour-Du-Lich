@@ -26,7 +26,7 @@ function SandboxPayContent() {
     const fetchBooking = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`http://localhost:4000/api/bookings/ticket/${maDon}`);
+        const res = await fetch(`/api-proxy/bookings/ticket/${maDon}`);
         if (!res.ok) throw new Error('Không tìm thấy thông tin đơn hàng này');
         const data = await res.json();
         setBooking(data);
@@ -54,7 +54,7 @@ function SandboxPayContent() {
 
       if (isZaloPay) {
         // Gọi API xác nhận thanh toán ZaloPay Gateway
-        const res = await fetch('http://localhost:4000/api/zalopay/confirm', {
+        const res = await fetch('/api-proxy/zalopay/confirm', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -70,7 +70,7 @@ function SandboxPayContent() {
         }
       } else {
         // Chuyển khoản VietQR / Mobile banking thông thường
-        const res = await fetch(`http://localhost:4000/api/bookings/confirm-by-madon/${maDon}`, {
+        const res = await fetch(`/api-proxy/bookings/confirm-by-madon/${maDon}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
