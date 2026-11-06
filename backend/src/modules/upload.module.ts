@@ -126,7 +126,9 @@ export class UploadController {
     this.uploadService.syncToFrontend(file.filename);
 
     const relativeUrl = `/uploads/tours/${file.filename}`;
-    const fullUrl = `http://localhost:4000${relativeUrl}`;
+    const backendOrigin =
+      process.env.NODE_ENV === 'production' ? 'https://viettour-backend.onrender.com' : 'http://localhost:4000';
+    const fullUrl = `${backendOrigin}${relativeUrl}`;
 
     return {
       success: true,

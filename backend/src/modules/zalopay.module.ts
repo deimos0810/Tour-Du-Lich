@@ -31,7 +31,12 @@ export class ZaloPayService {
     const mac = crypto.createHmac('sha256', key1).update(data).digest('hex');
 
     // Chuyển hướng tới trang thanh toán ZaloPay Gateway của hệ thống
-    const gatewayUrl = `http://localhost:3000/portal/sandbox-pay/${don.MaDon}?method=ZaloPay&appTransId=${appTransId}&amount=${amount}&mac=${mac}`;
+    const frontendOrigin =
+      process.env.FRONTEND_URL ||
+      (process.env.NODE_ENV === 'production'
+        ? 'https://viettour-frontend.onrender.com'
+        : 'http://localhost:3000');
+    const gatewayUrl = `${frontendOrigin.replace(/\/+$/, '')}/portal/sandbox-pay/${don.MaDon}?method=ZaloPay&appTransId=${appTransId}&amount=${amount}&mac=${mac}`;
 
     return {
       return_code: 1,

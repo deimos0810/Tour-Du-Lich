@@ -25,19 +25,24 @@ export class VNPayService {
 
   /** Tạo URL chuyển hướng sang Cổng VNPay Sandbox */
   createPaymentUrl(dto: { donHangId: number; amount: number; orderInfo: string; ipAddr: string; returnUrl?: string }) {
-    const date = new Date();
+    // VNPay bắt buộc vnp_CreateDate theo múi giờ Việt Nam (GMT+7) kể cả khi Server chạy UTC trên Render/Cloud
+    const vnTime = new Date(Date.now() + 7 * 60 * 60 * 1000);
     const createDate =
-      date.getFullYear().toString() +
-      ('0' + (date.getMonth() + 1)).slice(-2) +
-      ('0' + date.getDate()).slice(-2) +
-      ('0' + date.getHours()).slice(-2) +
-      ('0' + date.getMinutes()).slice(-2) +
-      ('0' + date.getSeconds()).slice(-2);
+      vnTime.getUTCFullYear().toString() +
+      ('0' + (vnTime.getUTCMonth() + 1)).slice(-2) +
+      ('0' + vnTime.getUTCDate()).slice(-2) +
+      ('0' + vnTime.getUTCHours()).slice(-2) +
+      ('0' + vnTime.getUTCMinutes()).slice(-2) +
+      ('0' + vnTime.getUTCSeconds()).slice(-2);
 
     const tmnCode = process.env.VNP_TMNCODE || 'FXFAHFEP';
     const secretKey = process.env.VNP_HASHSECRET || 'ZSBAXCUFSMZFYBKMELPCEWLUSMAJDHLI';
     let vnpUrl = process.env.VNP_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
-    const returnUrl = dto.returnUrl || process.env.VNP_RETURNURL || 'http://localhost:3000/portal/my-bookings';
+    const defaultFrontendReturn =
+      process.env.NODE_ENV === 'production'
+        ? 'https://viettour-frontend.onrender.com/portal/my-bookings'
+        : 'http://localhost:3000/portal/my-bookings';
+    const returnUrl = dto.returnUrl || process.env.VNP_RETURNURL || defaultFrontendReturn;
 
     const orderId = `${dto.donHangId}_${Date.now()}`;
     const amount = Math.round(dto.amount * 100); // VNPay tính bằng VND * 100
@@ -47,9 +52,9 @@ export class VNPayService {
       .replace(/[#&?]/g, '')
       .trim();
 
-    // Chuẩn hóa IPv4, tránh ::1 hoặc IPv6 làm VNPay báo lỗi định dạng
-    let clientIp = dto.ipAddr || '127.0.0.1';
-    if (clientIp.includes(':') || clientIp === '::1') {
+    // Chuẩn hóa IPv4: lấy IP đầu tiên nếu qua proxy (x-forwarded-for dạng "ip1, ip2"), tránh ::1 hoặc IPv6
+    let clientIp = String(dto.ipAddr || '127.0.0.1').split(',')[0].trim();
+    if (!clientIp || clientIp.includes(':') || clientIp === '::1') {
       clientIp = '127.0.0.1';
     }
 
@@ -167,7 +172,7 @@ export class VNPayController {
   constructor(private service: VNPayService) {}
 
   @Post('create-payment')
-  createPayment(@Body() body: { donHangId: number; amount: number; orderInfo: string }, @Req() req: any) {
+  createPayment(@Body() body: { donHangId: number; amount: number; orderInfo: string; returnUrl?: string }, @Req() req: any) {
     const ipAddr = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
     return this.service.createPaymentUrl({ ...body, ipAddr });
   }

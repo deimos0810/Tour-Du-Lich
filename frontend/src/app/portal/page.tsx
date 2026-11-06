@@ -161,12 +161,14 @@ export default function CustomerHomePage() {
   const handlePayVNPay = async (donHangId: number, amount: number, maDon: string) => {
     try {
       setLoadingVnpay(true);
+      const returnUrl = typeof window !== 'undefined' ? `${window.location.origin}/portal/my-bookings` : undefined;
       const res = await api<{ paymentUrl: string }>('/vnpay/create-payment', {
         method: 'POST',
         body: JSON.stringify({
           donHangId,
           amount,
           orderInfo: `Thanh toan don tour ${maDon} qua VNPay`,
+          returnUrl,
         }),
       });
       if (res.paymentUrl) {

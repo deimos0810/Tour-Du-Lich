@@ -71,8 +71,19 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy() { if (this.timer) clearInterval(this.timer); }
 
   /* ---------------------------------------------------------------- URL helpers */
-  private web = () => (process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:3000').replace(/\/$/, '');
-  private api = () => (process.env.API_PUBLIC_URL || `http://localhost:${process.env.PORT || 4000}/api`).replace(/\/$/, '');
+  private web = () =>
+    (
+      process.env.FRONTEND_URL ||
+      process.env.CORS_ORIGIN ||
+      (process.env.NODE_ENV === 'production' ? 'https://viettour-frontend.onrender.com' : 'http://localhost:3000')
+    ).replace(/\/$/, '');
+  private api = () =>
+    (
+      process.env.API_PUBLIC_URL ||
+      (process.env.NODE_ENV === 'production'
+        ? 'https://viettour-backend.onrender.com/api'
+        : `http://localhost:${process.env.PORT || 4000}/api`)
+    ).replace(/\/$/, '');
   unsubscribeUrl = (token: string) => `${this.api()}/portal/newsletter/unsubscribe?token=${token}`;
 
   /* ---------------------------------------------------------------- Layout + gửi + nhật ký */
