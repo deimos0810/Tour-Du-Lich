@@ -213,7 +213,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         INSERT INTO apdungctkm (ctkmid, tourid)
         SELECT 1, t.tourid
         FROM tour t
-        WHERE t.tourid IN (1, 5)
+        WHERE t.tourid IN (1, 2, 5, 9)
           AND EXISTS (SELECT 1 FROM chuongtrinhkhuyenmai WHERE ctkmid = 1)
         ON CONFLICT (ctkmid, tourid) DO NOTHING;
       `);

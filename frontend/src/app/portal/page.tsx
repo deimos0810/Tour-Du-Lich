@@ -462,21 +462,39 @@ export default function CustomerHomePage() {
       // 4. Danh mục tabs (MIEN_TRUNG, MIEN_BAC, QUOC_TE, KHUYEN_MAI)
       if (categoryFilter === 'MIEN_TRUNG') {
         const catName = (t.DanhMuc?.TenDanhMuc || '').toLowerCase();
+        const dest = (t.DiemDen || '').toLowerCase();
         if (
           !t.TenTour.includes('Đà Nẵng') &&
           !t.TenTour.includes('Hội An') &&
           !t.TenTour.includes('Huế') &&
-          !catName.includes('trung')
+          !t.TenTour.includes('Phong Nha') &&
+          !t.TenTour.includes('Nha Trang') &&
+          !t.TenTour.includes('Đà Lạt') &&
+          !dest.includes('đà nẵng') &&
+          !dest.includes('huế') &&
+          !dest.includes('quảng bình') &&
+          !dest.includes('nha trang') &&
+          !dest.includes('đà lạt') &&
+          !catName.includes('trung') &&
+          !catName.includes('di sản') &&
+          !catName.includes('di san')
         ) {
           return false;
         }
       }
       if (categoryFilter === 'MIEN_BAC') {
         const catName = (t.DanhMuc?.TenDanhMuc || '').toLowerCase();
+        const dest = (t.DiemDen || '').toLowerCase();
         if (
           !t.TenTour.includes('Sapa') &&
           !t.TenTour.includes('Hạ Long') &&
           !t.TenTour.includes('Hà Nội') &&
+          !t.TenTour.includes('Ninh Bình') &&
+          !t.TenTour.includes('Tràng An') &&
+          !dest.includes('lào cai') &&
+          !dest.includes('quảng ninh') &&
+          !dest.includes('ninh bình') &&
+          !dest.includes('hà nội') &&
           !catName.includes('bắc') &&
           !catName.includes('bac')
         ) {
@@ -485,10 +503,17 @@ export default function CustomerHomePage() {
       }
       if (categoryFilter === 'QUOC_TE') {
         const catName = (t.DanhMuc?.TenDanhMuc || '').toLowerCase();
+        const dest = (t.DiemDen || '').toLowerCase();
         if (
           !t.TenTour.includes('Nhật') &&
           !t.TenTour.includes('Hàn') &&
+          !t.TenTour.includes('Seoul') &&
+          !t.TenTour.includes('Tokyo') &&
           !t.TenTour.includes('Thái') &&
+          !dest.includes('tokyo') &&
+          !dest.includes('seoul') &&
+          !dest.includes('nhật') &&
+          !dest.includes('hàn') &&
           !catName.includes('quốc tế') &&
           !catName.includes('quoc te')
         ) {

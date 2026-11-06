@@ -486,44 +486,150 @@ export class CustomerOpsService {
   /** Chính sách hoàn tiền theo số ngày trước khởi hành */
   static refundRate(daysBefore: number) {
     if (daysBefore >= 15) return 1;
-    if (daysBefore >= 7) return 0.5;
-    if (daysBefore >= 3) return 0.3;
+    if (daysBefore >= 7) return 0.7;
+    if (daysBefore >= 3) return 0.5;
     return 0;
   }
 
   async cancelPreview(donHangId: number, customerId?: number | null) {
-    const don = await this.prisma.donDatTour.findUnique({ where: { DonHangID: donHangId }, include: { LichKhoiHanh: true } });
+    const don = await this.prisma.donDatTour.findUnique({
+      where: { DonHangID: donHangId },
+      include: { LichKhoiHanh: true, ThanhToan: true, DanhGia: true, ChiTietHanhKhach: true },
+    });
     if (!don) throw new NotFoundException('Không tìm thấy đơn hàng');
-    if (customerId && don.KhachHangID !== Number(customerId)) throw new ForbiddenException('Đơn hàng không thuộc tài khoản của bạn');
+    if (customerId && don.KhachHangID !== Number(customerId)) {
+      throw new ForbiddenException('Đơn hàng không thuộc tài khoản của bạn');
+    }
+    if (don.TrangThaiDon === 'Da huy') {
+      throw new BadRequestException('Đơn đặt tour này đã được hủy trước đó');
+    }
+    if (
+      don.TrangThaiDon === 'Hoan thanh' ||
+      don.LichKhoiHanh?.TrangThai === 'Hoan thanh' ||
+      (don.DanhGia && don.DanhGia.length > 0) ||
+      (don.ChiTietHanhKhach && don.ChiTietHanhKhach.some((p) => p.TrangThaiDiemDanh === 1))
+    ) {
+      throw new BadRequestException('Đơn đặt tour đã hoàn thành chuyến đi hoặc đã điểm danh lên đoàn nên không thể hủy!');
+    }
     if (!['Cho thanh toan', 'Da dat coc', 'Da thanh toan', 'Da xac nhan'].includes(don.TrangThaiDon)) {
       throw new BadRequestException('Đơn ở trạng thái hiện tại không thể hủy');
     }
-    const days = Math.floor((don.LichKhoiHanh.NgayKhoiHanh.getTime() - Date.now()) / DAY);
-    if (days < 0) throw new BadRequestException('Tour đã khởi hành, không thể hủy');
-    const rate = CustomerOpsService.refundRate(days);
-    const daThu = n(don.TienCoc);
-    return { don, days, rate, daThu, hoanTien: Math.round(daThu * rate), phiHuy: daThu - Math.round(daThu * rate) };
+
+    const diffMs = don.LichKhoiHanh.NgayKhoiHanh.getTime() - Date.now();
+    const daysUntil = Math.max(0, Math.ceil(diffMs / DAY));
+    const isUnpaid = don.TrangThaiDon === 'Cho thanh toan';
+
+    if (!isUnpaid && diffMs < 0) {
+      throw new BadRequestException('Tour đã khởi hành nên không thể hủy đơn');
+    }
+
+    const tongTienDon = Math.max(0, n(don.TongTien) - n(don.GiamGia));
+
+    if (isUnpaid) {
+      return {
+        don,
+        days: daysUntil,
+        daysUntil,
+        rate: 1,
+        refundPercent: 100,
+        penaltyPercent: 0,
+        daThu: 0,
+        tienGoc: 0,
+        tongTienDon,
+        hoanTien: 0,
+        tienHoan: 0,
+        phiHuy: 0,
+        tienPhat: 0,
+        isUnpaid: true,
+        policyNote: 'Đơn đang ở trạng thái Chờ thanh toán (chưa thu tiền) — Quý khách được hủy giữ chỗ miễn phí 100% (Phí hủy: 0 đ).',
+      };
+    }
+
+    const paidFromTx = (don.ThanhToan || [])
+      .filter((t) => t.TrangThai === 'Thanh cong')
+      .reduce((sum, t) => sum + n(t.SoTien), 0);
+    const daThu = Math.max(n(don.TienCoc), paidFromTx) || tongTienDon;
+    const rate = CustomerOpsService.refundRate(daysUntil);
+    const refundPercent = Math.round(rate * 100);
+    const penaltyPercent = 100 - refundPercent;
+    const hoanTien = Math.round(daThu * rate);
+    const phiHuy = Math.max(0, daThu - hoanTien);
+
+    let policyNote = '';
+    if (daysUntil >= 15) {
+      policyNote = 'Hủy trước ngày khởi hành từ 15 ngày trở lên: Miễn phí hủy (0%), hoàn lại 100% số tiền đã thanh toán.';
+    } else if (daysUntil >= 7) {
+      policyNote = 'Hủy trước ngày khởi hành từ 7 đến 14 ngày: Phí hủy 30%, hoàn lại 70% số tiền đã thanh toán.';
+    } else if (daysUntil >= 3) {
+      policyNote = 'Hủy trước ngày khởi hành từ 3 đến 6 ngày: Phí hủy 50%, hoàn lại 50% số tiền đã thanh toán.';
+    } else {
+      policyNote = 'Hủy sát ngày khởi hành (dưới 3 ngày): Phí hủy 100%, không hoàn tiền do đã chốt vé máy bay và dịch vụ lữ hành.';
+    }
+
+    return {
+      don,
+      days: daysUntil,
+      daysUntil,
+      rate,
+      refundPercent,
+      penaltyPercent,
+      daThu,
+      tienGoc: daThu,
+      tongTienDon,
+      hoanTien,
+      tienHoan: hoanTien,
+      phiHuy,
+      tienPhat: phiHuy,
+      isUnpaid: false,
+      policyNote,
+    };
   }
 
   async cancel(donHangId: number, customerId?: number | null, lyDo?: string) {
     const p = await this.cancelPreview(donHangId, customerId);
+    const reasonText = (lyDo || '').trim() || 'Khách hàng thay đổi kế hoạch cá nhân';
     return this.prisma.$transaction(async (tx) => {
       const fresh = await tx.donDatTour.findUniqueOrThrow({ where: { DonHangID: donHangId } });
       if (fresh.TrangThaiDon === 'Da huy') throw new BadRequestException('Đơn đã được hủy trước đó');
+      const now = new Date();
+      const timeStr = `${now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${now.toLocaleDateString('vi-VN')}`;
+      const refundNote = p.daThu > 0
+        ? ` (Đã đóng: ${p.daThu.toLocaleString('vi-VN')}đ, Hoàn lại: ${p.hoanTien.toLocaleString('vi-VN')}đ - ${p.refundPercent}%)`
+        : ' (Hủy đơn chờ thanh toán - Miễn phí)';
       await tx.donDatTour.update({
         where: { DonHangID: donHangId },
-        data: { TrangThaiDon: 'Da huy', GhiChu: `${fresh.GhiChu ? fresh.GhiChu + ' | ' : ''}Khách hủy ${new Date().toLocaleDateString('vi-VN')}: ${lyDo || 'Không nêu lý do'}` },
+        data: {
+          TrangThaiDon: 'Da huy',
+          GhiChu: `${fresh.GhiChu ? fresh.GhiChu + '\n' : ''}[KHÁCH HÀNG HỦY] ${timeStr} - Lý do: ${reasonText}${refundNote}`,
+        },
       });
-      await tx.lichKhoiHanh.update({ where: { LichID: fresh.LichID }, data: { SoChoDaDat: { decrement: fresh.SoLuongNguoiLon + fresh.SoLuongTreEm } } });
+      const lich = await tx.lichKhoiHanh.findUnique({ where: { LichID: fresh.LichID } });
+      if (lich) {
+        const nextBooked = Math.max(0, lich.SoChoDaDat - (fresh.SoLuongNguoiLon + fresh.SoLuongTreEm));
+        await tx.lichKhoiHanh.update({
+          where: { LichID: fresh.LichID },
+          data: { SoChoDaDat: nextBooked },
+        });
+      }
       if (p.hoanTien > 0) {
         await tx.thanhToan.create({
           data: {
-            DonHangID: donHangId, SoTien: p.hoanTien, HinhThucTT: fresh.PhuongThucTT || 'Chuyen khoan', TrangThai: 'Da hoan tien',
-            MaGiaoDich: `RF-${fresh.MaDon}-${Date.now().toString().slice(-5)}`, GhiChu: `Hoàn ${p.rate * 100}% do hủy trước ${p.days} ngày`,
+            DonHangID: donHangId,
+            SoTien: p.hoanTien,
+            HinhThucTT: fresh.PhuongThucTT || 'Chuyen khoan',
+            TrangThai: 'Da hoan tien',
+            MaGiaoDich: `RF-${fresh.MaDon}-${Date.now().toString().slice(-5)}`,
+            GhiChu: `Hoàn ${p.refundPercent}% do hủy trước ${p.daysUntil} ngày`,
           },
         });
       }
-      return { message: 'Đã hủy đơn đặt tour', hoanTien: p.hoanTien, phiHuy: p.phiHuy, tyLeHoan: p.rate };
+      return {
+        message: 'Đã hủy đơn đặt tour thành công',
+        hoanTien: p.hoanTien,
+        phiHuy: p.phiHuy,
+        tyLeHoan: p.rate,
+        refundPercent: p.refundPercent,
+      };
     });
   }
 
@@ -546,15 +652,24 @@ export class CustomerOpsService {
       throw new BadRequestException('Bạn đã đánh giá đơn tour này rồi');
     }
 
-    return this.prisma.danhGia.create({
-      data: {
-        KhachHangID: don.KhachHangID,
-        DonHangID: don.DonHangID,
-        TourID: don.LichKhoiHanh.TourID,
-        SoSao: sao,
-        BinhLuan: b.binhLuan?.trim() || null,
-        TrangThaiDuyet: 'Da hien thi',
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const dg = await tx.danhGia.create({
+        data: {
+          KhachHangID: don.KhachHangID,
+          DonHangID: don.DonHangID,
+          TourID: don.LichKhoiHanh.TourID,
+          SoSao: sao,
+          BinhLuan: b.binhLuan?.trim() || null,
+          TrangThaiDuyet: 'Da hien thi',
+        },
+      });
+      if (don.TrangThaiDon !== 'Hoan thanh') {
+        await tx.donDatTour.update({
+          where: { DonHangID: don.DonHangID },
+          data: { TrangThaiDon: 'Hoan thanh' },
+        });
+      }
+      return dg;
     });
   }
 
@@ -613,9 +728,9 @@ export class CustomerOpsController {
   }
 
   @Post('bookings/:id/cancel')
-  cancel(@Param('id', ParseIntPipe) id: number, @Body() b: { customerId?: number; lyDo?: string }, @Req() req: any) {
+  cancel(@Param('id', ParseIntPipe) id: number, @Body() b: { customerId?: number; lyDo?: string; lyDoHuy?: string }, @Req() req: any) {
     const cid = this.extractCustomer(req, b?.customerId);
-    return this.s.cancel(id, cid, b?.lyDo);
+    return this.s.cancel(id, cid, b?.lyDoHuy || b?.lyDo);
   }
 
   @Post('reviews')

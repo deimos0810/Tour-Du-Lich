@@ -112,17 +112,49 @@ export default function MyBookingsPage() {
     }
   }, [vnpaySynced, user]);
 
+  const isBookingCompleted = (b: Booking) => {
+    if (b.TrangThaiDon === 'Da huy') return false;
+    const hasReviewed = Boolean(b.DanhGia && b.DanhGia.length > 0);
+    const hasCheckedIn = Boolean(b.ChiTietHanhKhach && b.ChiTietHanhKhach.some((p) => p.TrangThaiDiemDanh === 1));
+    const lichTrangThai = (b.LichKhoiHanh as any)?.TrangThai;
+    const isPastReturn = Boolean(
+      b.LichKhoiHanh?.NgayKetThuc && new Date(b.LichKhoiHanh.NgayKetThuc).getTime() <= Date.now(),
+    );
+    return (
+      b.TrangThaiDon === 'Hoan thanh' ||
+      lichTrangThai === 'Hoan thanh' ||
+      hasReviewed ||
+      ((b.TrangThaiDon === 'Da thanh toan' || b.TrangThaiDon === 'Da xac nhan') && (hasCheckedIn || isPastReturn))
+    );
+  };
+
+  const getEffectiveStatus = (b: Booking) => {
+    if (b.TrangThaiDon === 'Da huy') return 'Da huy';
+    if (isBookingCompleted(b)) return 'Hoan thanh';
+    return b.TrangThaiDon;
+  };
+
+  const canCancelBooking = (b: Booking) => {
+    const eff = getEffectiveStatus(b);
+    if (eff === 'Da huy' || eff === 'Hoan thanh') return false;
+    if (b.TrangThaiDon === 'Cho thanh toan') return true;
+    const isPastDepart = Boolean(
+      b.LichKhoiHanh?.NgayKhoiHanh && new Date(b.LichKhoiHanh.NgayKhoiHanh).getTime() <= Date.now(),
+    );
+    return !isPastDepart;
+  };
+
   const tabs = [
     { id: 'ALL', label: 'Tất cả' },
     { id: 'Cho thanh toan', label: 'Chờ thanh toán' },
     { id: 'Da thanh toan', label: 'Đã thanh toán' },
-    { id: 'Da dat coc', label: 'Đã đặt cọc' },
+    { id: 'Hoan thanh', label: 'Đã hoàn thành' },
     { id: 'Da huy', label: 'Đã hủy' },
   ];
 
   const filteredBookings = bookings.filter((b) => {
     if (statusTab === 'ALL') return true;
-    return b.TrangThaiDon === statusTab;
+    return getEffectiveStatus(b) === statusTab;
   });
 
   // Mở modal thanh toán
@@ -210,10 +242,12 @@ export default function MyBookingsPage() {
     setCancelPreview(null);
     try {
       const cid = user?.customerId || (booking as any).KhachHangID;
-      const data = await api<any>(`/portal/bookings/${booking.DonHangID}/cancel-preview?customerId=${cid}`);
+      const query = cid ? `?customerId=${cid}` : '';
+      const data = await api<any>(`/portal/bookings/${booking.DonHangID}/cancel-preview${query}`);
       setCancelPreview(data);
     } catch (e: any) {
       alert(e.message || 'Lỗi kiểm tra điều kiện hủy tour');
+      setCancelModalBooking(null);
     }
   };
 
@@ -229,11 +263,19 @@ export default function MyBookingsPage() {
       const cid = user?.customerId || (cancelModalBooking as any).KhachHangID;
       const res = await api<any>(`/portal/bookings/${cancelModalBooking.DonHangID}/cancel`, {
         method: 'POST',
-        body: JSON.stringify({ customerId: cid, lyDoHuy: cancelReason.trim() }),
+        body: JSON.stringify({
+          customerId: cid,
+          lyDo: cancelReason.trim(),
+          lyDoHuy: cancelReason.trim(),
+        }),
       });
-      setToastMsg(`Đã hủy đơn ${cancelModalBooking.MaDon} thành công. ${res?.hoanTien > 0 ? `Tiền hoàn dự kiến: ${vnd(res.hoanTien)}.` : ''}`);
+      setToastMsg(
+        `Đã hủy đơn ${cancelModalBooking.MaDon} thành công! ${
+          res?.hoanTien > 0 ? `Số tiền hoàn trả: ${vnd(res.hoanTien)} (${res.refundPercent || Math.round((res.tyLeHoan || 0) * 100)}%).` : 'Đã giải phóng chỗ giữ trên hệ thống.'
+        }`,
+      );
       setCancelModalBooking(null);
-      bookingsApi.reload();
+      void bookingsApi.reload();
     } catch (err: any) {
       alert(err.message || 'Hủy đơn không thành công');
     } finally {
@@ -430,7 +472,7 @@ export default function MyBookingsPage() {
                           </span>
                         )}
                     </div>
-                    <Status value={b.TrangThaiDon} />
+                    <Status value={getEffectiveStatus(b)} />
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr auto', gap: '20px', alignItems: 'center' }}>
@@ -476,8 +518,8 @@ export default function MyBookingsPage() {
                           </button>
                         )}
 
-                        {/* NÚT XEM VÉ QR CODE NẾU ĐÃ THANH TOÁN */}
-                        {b.TrangThaiDon === 'Da thanh toan' && (
+                        {/* NÚT XEM VÉ QR CODE NẾU ĐÃ THANH TOÁN HOẶC HOÀN THÀNH */}
+                        {(b.TrangThaiDon === 'Da thanh toan' || isBookingCompleted(b)) && (
                           <button
                             className="btn btn-sm"
                             onClick={() => {
@@ -491,7 +533,7 @@ export default function MyBookingsPage() {
                         )}
 
                         {/* NÚT ĐÁNH GIÁ TOUR */}
-                        {(b.TrangThaiDon === 'Da thanh toan' || b.TrangThaiDon === 'Hoan thanh') && (
+                        {(b.TrangThaiDon === 'Da thanh toan' || isBookingCompleted(b)) && (
                           b.DanhGia && b.DanhGia.length > 0 ? (
                             <span
                               className="badge"
@@ -515,8 +557,8 @@ export default function MyBookingsPage() {
                           )
                         )}
 
-                        {/* NÚT HỦY TOUR */}
-                        {b.TrangThaiDon !== 'Da huy' && b.TrangThaiDon !== 'Hoan thanh' && (
+                        {/* NÚT HỦY TOUR (CHỈ HIỂN THỊ KHI CHƯA HOÀN THÀNH / CHƯA ĐÁNH GIÁ / CHƯA ĐIỂM DANH / CHƯA HỦY) */}
+                        {canCancelBooking(b) && (
                           <button
                             className="btn btn-sm"
                             onClick={() => handleOpenCancelModal(b)}
@@ -889,7 +931,7 @@ export default function MyBookingsPage() {
               <div>Tổng tiền: <strong style={{ color: 'var(--zinc-900)', fontSize: '16px' }}>{vnd(selectedBooking.TongTien)}</strong></div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
                 <span>Trạng thái:</span>
-                <Status value={selectedBooking.TrangThaiDon} />
+                <Status value={getEffectiveStatus(selectedBooking)} />
               </div>
               {selectedBooking.TrangThaiDon === 'Da huy' && (
                 <div style={{ marginTop: '10px', padding: '12px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', color: '#9f1239' }}>
@@ -906,7 +948,7 @@ export default function MyBookingsPage() {
             </div>
             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
               <button className="btn btn-outline btn-sm" onClick={() => setSelectedBooking(null)}>Đóng</button>
-              {selectedBooking.TrangThaiDon !== 'Da huy' && selectedBooking.TrangThaiDon !== 'Hoan thanh' && (
+              {canCancelBooking(selectedBooking) && (
                 <button
                   className="btn btn-sm"
                   onClick={() => {
@@ -919,7 +961,7 @@ export default function MyBookingsPage() {
                   Hủy đơn này
                 </button>
               )}
-              {(selectedBooking.TrangThaiDon === 'Da thanh toan' || selectedBooking.TrangThaiDon === 'Hoan thanh') && (
+              {(selectedBooking.TrangThaiDon === 'Da thanh toan' || isBookingCompleted(selectedBooking)) && (
                 selectedBooking.DanhGia && selectedBooking.DanhGia.length > 0 ? (
                   <span
                     className="badge"
@@ -944,12 +986,12 @@ export default function MyBookingsPage() {
                   </button>
                 )
               )}
-              {(selectedBooking.TrangThaiDon === 'Da thanh toan' || selectedBooking.TrangThaiDon === 'Da dat coc') && (
+              {(selectedBooking.TrangThaiDon === 'Da thanh toan' || selectedBooking.TrangThaiDon === 'Da dat coc' || isBookingCompleted(selectedBooking)) && (
                 <Link href={`/portal/ticket/${selectedBooking.MaDon}`} className="btn btn-primary btn-sm" style={{ background: 'var(--zinc-900)', borderColor: 'var(--zinc-900)', textDecoration: 'none', fontWeight: 600 }}>
                   Xem Vé QR
                 </Link>
               )}
-              {(selectedBooking.TrangThaiDon === 'Da thanh toan' || selectedBooking.TrangThaiDon === 'Da dat coc') && (
+              {(selectedBooking.TrangThaiDon === 'Da thanh toan' || selectedBooking.TrangThaiDon === 'Da dat coc' || isBookingCompleted(selectedBooking)) && (
                 <button
                   className="btn btn-outline btn-sm"
                   style={{ fontWeight: 600, color: 'var(--rose-600)', borderColor: 'var(--rose-300)' }}
@@ -968,7 +1010,7 @@ export default function MyBookingsPage() {
       {/* ========================================================================= */}
       {cancelModalBooking && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.7)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div style={{ maxWidth: '520px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)', padding: '24px' }}>
+          <div style={{ maxWidth: '540px', width: '100%', maxHeight: '92vh', overflowY: 'auto', borderRadius: 'var(--radius-lg)', background: '#FFFFFF', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)', padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
               <div>
                 <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--rose-600)', margin: 0 }}>Hủy Đơn Đặt Tour</h3>
@@ -979,40 +1021,68 @@ export default function MyBookingsPage() {
               </button>
             </div>
 
-            <div style={{ marginBottom: '16px', background: 'var(--zinc-50)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontSize: '13px' }}>
-              <div style={{ fontWeight: 600, color: 'var(--zinc-900)', marginBottom: '4px' }}>
+            <div style={{ marginBottom: '14px', background: 'var(--zinc-50)', padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontSize: '13px' }}>
+              <div style={{ fontWeight: 700, color: 'var(--zinc-900)', marginBottom: '4px' }}>
                 {cancelModalBooking.LichKhoiHanh?.Tour?.TenTour}
               </div>
-              <div style={{ color: 'var(--text-muted)' }}>
-                Khởi hành: <strong>{new Date(cancelModalBooking.LichKhoiHanh?.NgayKhoiHanh).toLocaleDateString('vi-VN')}</strong>
+              <div style={{ color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <span>Khởi hành: <strong>{new Date(cancelModalBooking.LichKhoiHanh?.NgayKhoiHanh).toLocaleDateString('vi-VN')}</strong></span>
+                <span>Trạng thái đơn: <strong>{cancelModalBooking.TrangThaiDon === 'Cho thanh toan' ? 'Chờ thanh toán' : 'Đã thanh toán'}</strong></span>
               </div>
             </div>
 
             {cancelPreview ? (
-              <div style={{ marginBottom: '18px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: 'var(--radius-md)', padding: '12px', fontSize: '12.5px', color: '#92400E' }}>
-                  <div style={{ fontWeight: 700, marginBottom: '2px' }}>Chính sách hủy lữ hành áp dụng:</div>
-                  <div>• {cancelPreview.policyNote} (Còn <strong>{cancelPreview.daysUntil}</strong> ngày đến ngày đi)</div>
+              <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div
+                  style={{
+                    background: cancelPreview.isUnpaid ? '#ECFDF5' : '#FFFBEB',
+                    border: cancelPreview.isUnpaid ? '1px solid #6EE7B7' : '1px solid #FCD34D',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '12px',
+                    fontSize: '12.5px',
+                    color: cancelPreview.isUnpaid ? '#065F46' : '#92400E',
+                  }}
+                >
+                  <div style={{ fontWeight: 700, marginBottom: '3px' }}>
+                    {cancelPreview.isUnpaid ? '✓ Chính sách hủy đơn Chờ thanh toán (Miễn phí 100%):' : 'Chính sách hoàn hủy lữ hành áp dụng:'}
+                  </div>
+                  <div>
+                    • {cancelPreview.policyNote} (Còn <strong>{cancelPreview.daysUntil}</strong> ngày đến ngày khởi hành)
+                  </div>
                 </div>
 
                 <div style={{ background: 'var(--zinc-50)', borderRadius: 'var(--radius-md)', padding: '12px', border: '1px solid var(--border)', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Tổng tiền đã đóng:</span>
-                    <strong>{vnd(cancelPreview.tienGoc)}</strong>
+                    <span style={{ color: 'var(--text-muted)' }}>Giá trị đơn đặt chỗ:</span>
+                    <strong>{vnd(cancelPreview.tongTienDon ?? cancelModalBooking.TongTien)}</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Tỷ lệ hoàn tiền:</span>
-                    <strong style={{ color: cancelPreview.refundPercent > 0 ? 'var(--emerald-600)' : 'var(--rose-600)' }}>{cancelPreview.refundPercent}%</strong>
+                    <span style={{ color: 'var(--text-muted)' }}>Số tiền khách đã đóng:</span>
+                    <strong>{vnd(cancelPreview.tienGoc ?? 0)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Tỷ lệ hoàn tiền áp dụng:</span>
+                    <strong style={{ color: (cancelPreview.refundPercent ?? 0) > 0 ? 'var(--emerald-600)' : 'var(--rose-600)' }}>
+                      {cancelPreview.refundPercent ?? 0}%
+                    </strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: 'var(--text-muted)' }}>Phí phạt hủy tour:</span>
-                    <span style={{ color: 'var(--rose-600)', fontWeight: 600 }}>{vnd(cancelPreview.tienPhat)}</span>
+                    <span style={{ color: 'var(--rose-600)', fontWeight: 600 }}>{vnd(cancelPreview.tienPhat ?? 0)}</span>
                   </div>
                   <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '4px 0' }} />
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
                     <span style={{ fontWeight: 700, color: 'var(--zinc-900)' }}>Số tiền hoàn lại cho bạn:</span>
-                    <strong style={{ color: 'var(--emerald-600)', fontSize: '16px' }}>{vnd(cancelPreview.tienHoan)}</strong>
+                    <strong style={{ color: 'var(--emerald-600)', fontSize: '16px' }}>{vnd(cancelPreview.tienHoan ?? 0)}</strong>
                   </div>
+                </div>
+
+                {/* BẢNG QUY ĐỊNH CƠ CHẾ HOÀN HỦY VIETTOUR RÕ RÀNG */}
+                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '10px 12px', fontSize: '11.5px', color: '#475569', lineHeight: 1.55 }}>
+                  <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '4px' }}>Quy định cơ chế hủy đơn tại VietTour:</div>
+                  <div>• <strong>Đơn Chờ thanh toán:</strong> Hủy giữ chỗ miễn phí 100% (Phí phạt 0 đ), hệ thống tự động hoàn trả ghế trống về lịch khởi hành.</div>
+                  <div>• <strong>Đơn Đã thanh toán:</strong> Hủy trước ≥ 15 ngày hoàn <strong>100%</strong> | Trước 7–14 ngày hoàn <strong>70%</strong> (phạt 30%) | Trước 3–6 ngày hoàn <strong>50%</strong> (phạt 50%) | Dưới 3 ngày trước giờ khởi hành: <strong>Không hoàn tiền (0%)</strong>.</div>
+                  <div>• <strong>Đơn Đã hoàn thành / Đã điểm danh / Đã đánh giá:</strong> Không thể hủy đơn.</div>
                 </div>
               </div>
             ) : (

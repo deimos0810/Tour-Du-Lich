@@ -548,9 +548,10 @@ export class BookingsService {
           GhiChu: newGhiChu,
         },
       });
+      const nextBooked = Math.max(0, current.LichKhoiHanh.SoChoDaDat - (don.SoLuongNguoiLon + don.SoLuongTreEm));
       await tx.lichKhoiHanh.update({
         where: { LichID: don.LichID },
-        data: { SoChoDaDat: { decrement: don.SoLuongNguoiLon + don.SoLuongTreEm } },
+        data: { SoChoDaDat: nextBooked },
       });
       return {
         ...don,
