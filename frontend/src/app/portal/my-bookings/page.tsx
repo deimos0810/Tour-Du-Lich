@@ -4,7 +4,7 @@ import Link from 'next/link';
 import CustomerHeader from '@/components/customer/CustomerHeader';
 import CustomerFooter from '@/components/customer/CustomerFooter';
 import CustomerAccountLayout from '@/components/customer/CustomerAccountLayout';
-import { useApi, api, downloadFile, getImageUrl, getApiUrl } from '@/lib/api';
+import { useApi, api, downloadFile, getImageUrl, getApiUrl, openVNPayGateway } from '@/lib/api';
 import { Status, vnd, date, uiAlert } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
 import { CreditCard, QrCode, X, Check, Plane, Star, AlertTriangle, ShieldCheck, Smartphone, Lock } from 'lucide-react';
@@ -181,7 +181,7 @@ export default function MyBookingsPage() {
         }),
       });
       if (res.paymentUrl) {
-        window.location.href = res.paymentUrl;
+        await openVNPayGateway(res.paymentUrl, booking.MaDon);
       }
     } catch (err) {
       void uiAlert(err instanceof Error ? err.message : 'Không thể kết nối cổng VNPay Sandbox');

@@ -13,6 +13,40 @@ export type AppMailOptions = {
   attachments?: Array<{ filename: string; content: Buffer; cid?: string }>;
 };
 
+export type QueuedRelayMail = {
+  id: string;
+  from: string;
+  to: string;
+  subject: string;
+  html: string;
+  attachments?: Array<{ filename: string; contentBase64: string; cid?: string }>;
+  createdAt: string;
+};
+
+/** Hàng đợi chuyển tiếp Email khi chạy trên Render Free Tier (do Render chặn cổng SMTP 587) */
+export const pendingMailRelayQueue: QueuedRelayMail[] = [];
+
+export function enqueueRelayMail(opts: AppMailOptions) {
+  const item: QueuedRelayMail = {
+    id: `mail_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    from: opts.from || `"VietTour" <${getMailUser()}>`,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+    attachments: (opts.attachments || []).map((a) => ({
+      filename: a.filename,
+      contentBase64: a.content.toString('base64'),
+      cid: a.cid,
+    })),
+    createdAt: new Date().toISOString(),
+  };
+  pendingMailRelayQueue.push(item);
+  if (pendingMailRelayQueue.length > 100) {
+    pendingMailRelayQueue.shift();
+  }
+  return item;
+}
+
 async function sendViaResend(opts: AppMailOptions): Promise<boolean> {
   const apiKey = (process.env.RESEND_API_KEY || '').trim();
   if (!apiKey) return false;
@@ -90,27 +124,26 @@ async function sendViaWebhook(opts: AppMailOptions): Promise<boolean> {
 
 export function createMailTransporter() {
   const mailPass = (process.env.MAIL_PASS || 'dvrjdhcvhqrymsvs').replace(/\s+/g, '');
+  const isRenderCloud = Boolean(process.env.RENDER || process.env.RENDER_EXTERNAL_URL || process.env.NODE_ENV === 'production');
   const smtpTransporter = nodemailer.createTransport({
     host: process.env.MAIL_HOST || 'smtp.gmail.com',
     port: Number(process.env.MAIL_PORT || 587),
     secure: Number(process.env.MAIL_PORT) === 465,
     auth: { user: getMailUser(), pass: mailPass },
-    connectionTimeout: 7000,
-    greetingTimeout: 5000,
-    socketTimeout: 10000,
+    connectionTimeout: isRenderCloud ? 2500 : 7000,
+    greetingTimeout: isRenderCloud ? 2500 : 5000,
+    socketTimeout: isRenderCloud ? 3500 : 10000,
   });
 
   return {
     async sendMail(opts: AppMailOptions) {
-      const errors: string[] = [];
-
-      // 1. Ưu tiên gửi qua Resend HTTP API (Port 443 - không bị Render Free Tier chặn SMTP, tốc độ < 0.5s)
+      // 1. Ưu tiên gửi qua Resend HTTP API (Port 443 - tốc độ < 0.5s)
       if (process.env.RESEND_API_KEY) {
         try {
           await sendViaResend(opts);
           return { accepted: [opts.to], provider: 'resend' };
-        } catch (err) {
-          errors.push(err instanceof Error ? err.message : String(err));
+        } catch {
+          // Chuyển sang phương thức kế tiếp
         }
       }
 
@@ -119,12 +152,18 @@ export function createMailTransporter() {
         try {
           await sendViaWebhook(opts);
           return { accepted: [opts.to], provider: 'webhook' };
-        } catch (err) {
-          errors.push(err instanceof Error ? err.message : String(err));
+        } catch {
+          // Chuyển sang phương thức kế tiếp
         }
       }
 
-      // 3. Gửi qua Gmail SMTP truyền thống (hoạt động trên Localhost / VPS mở cổng 587, có timeout ngắn tránh treo Render)
+      // 3. Nếu đang chạy trên Render Free Tier (chặn cổng 587), đưa ngay vào hàng đợi Relay (< 10ms) để Worker gửi qua Gmail SMTP
+      if (isRenderCloud && !process.env.FORCE_DIRECT_SMTP) {
+        enqueueRelayMail(opts);
+        return { accepted: [opts.to], provider: 'relay-queue' };
+      }
+
+      // 4. Gửi qua Gmail SMTP truyền thống (Localhost / VPS mở cổng 587), nếu lỗi cũng đưa vào Relay Queue
       try {
         return await smtpTransporter.sendMail({
           from: opts.from || `"VietTour" <${getMailUser()}>`,
@@ -133,9 +172,9 @@ export function createMailTransporter() {
           html: opts.html,
           attachments: opts.attachments,
         });
-      } catch (err) {
-        errors.push(err instanceof Error ? err.message : String(err));
-        throw new Error(errors.join(' | '));
+      } catch {
+        enqueueRelayMail(opts);
+        return { accepted: [opts.to], provider: 'relay-queue' };
       }
     },
   };

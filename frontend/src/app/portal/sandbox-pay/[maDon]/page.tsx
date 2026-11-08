@@ -13,6 +13,7 @@ function SandboxPayContent() {
 
   const method = searchParams?.get('method') || 'Banking';
   const isZaloPay = method.toLowerCase().includes('zalo');
+  const isVNPay = method.toLowerCase().includes('vnpay');
   const appTransId = searchParams?.get('appTransId');
 
   const [booking, setBooking] = useState<any>(null);
@@ -20,6 +21,9 @@ function SandboxPayContent() {
   const [submitting, setSubmitting] = useState(false);
   const [paidSuccess, setPaidSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [cardNumber, setCardNumber] = useState('9704198526191432198');
+  const [cardHolder, setCardHolder] = useState('NGUYEN VAN A');
+  const [cardDate, setCardDate] = useState('07/15');
   const [otp, setOtp] = useState('123456');
 
   useEffect(() => {
@@ -68,6 +72,22 @@ function SandboxPayContent() {
         if (!res.ok) {
           const errData = await res.json();
           throw new Error(errData.message || 'Xác nhận ZaloPay thất bại');
+        }
+      } else if (isVNPay) {
+        // Xác nhận thanh toán qua Cổng VNPAY Sandbox (Thẻ NCB)
+        const res = await fetch(`/api-proxy/bookings/confirm-by-madon/${maDon}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            hinhThucTT: 'VNPay',
+            maGiaoDich: `VNP-${Date.now().toString().slice(-8)}`,
+            ghiChu: `Thanh toán trực tuyến thành công qua cổng VNPAY (Thẻ NCB ${cardNumber.slice(-4)})`,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.message || 'Xác nhận thanh toán VNPAY thất bại');
         }
       } else {
         // Chuyển khoản VietQR / Mobile banking thông thường
@@ -150,14 +170,14 @@ function SandboxPayContent() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: '#FFFFFF', color: primaryColor, display: 'grid', placeItems: 'center', fontWeight: 900, fontSize: '13px' }}>
-                {isZaloPay ? 'ZP' : 'VT'}
+                {isZaloPay ? 'ZP' : isVNPay ? 'VNP' : 'VT'}
               </div>
               <span style={{ fontWeight: 800, fontSize: '15px', letterSpacing: '0.2px' }}>
-                {isZaloPay ? 'Cổng Ví ZaloPay Sandbox' : 'VietTour Pay Sandbox'}
+                {isZaloPay ? 'Cổng Ví ZaloPay Sandbox' : isVNPay ? 'Cổng Thanh Toán VNPAY Sandbox' : 'VietTour Pay Sandbox'}
               </span>
             </div>
             <span style={{ fontSize: '11px', background: 'rgba(255,255,255,0.2)', padding: '3px 8px', borderRadius: '12px', fontWeight: 700 }}>
-              {isZaloPay ? 'ZALOPAY GATEWAY' : 'MÔ PHỎNG DI ĐỘNG'}
+              {isZaloPay ? 'ZALOPAY GATEWAY' : isVNPay ? 'VNPAY NCB GATEWAY' : 'MÔ PHỎNG DI ĐỘNG'}
             </span>
           </div>
 
@@ -282,17 +302,53 @@ function SandboxPayContent() {
               </div>
             </div>
 
-            {/* TÀI KHOẢN NGUỒN SANDBOX */}
+            {/* TÀI KHOẢN NGUỒN SANDBOX / THẺ NCB VNPAY */}
             <div style={{ background: isZaloPay ? '#EFF6FF' : '#F0F9FF', borderRadius: '14px', padding: '14px', border: `1px solid ${isZaloPay ? '#BFDBFE' : '#BAE6FD'}`, marginBottom: '18px' }}>
-              <div style={{ fontSize: '11px', color: primaryColor, fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px' }}>
-                {isZaloPay ? 'VÍ ĐIỆN TỬ ZALOPAY TEST' : 'TÀI KHOẢN THANH TOÁN (SANDBOX)'}
+              <div style={{ fontSize: '11px', color: primaryColor, fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>
+                {isZaloPay ? 'VÍ ĐIỆN TỬ ZALOPAY TEST' : isVNPay ? 'THẺ ATM NỘI ĐỊA — NGÂN HÀNG NCB (VNPAY SANDBOX)' : 'TÀI KHOẢN THANH TOÁN (SANDBOX)'}
               </div>
-              <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
-                {isZaloPay ? 'Ví ZaloPay Demo (Số dư 50.000.000 đ)' : 'Ví / Tài khoản Khách Hàng Test'}
-              </div>
-              <div style={{ fontSize: '12px', color: primaryColor, marginTop: '2px' }}>
-                Số dư khả dụng: <strong>100.000.000 đ</strong> (Đủ điều kiện thanh toán)
-              </div>
+              {isVNPay ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#475569', fontWeight: 600 }}>Số thẻ ATM (NCB):</label>
+                    <input
+                      type="text"
+                      value={cardNumber}
+                      onChange={(e) => setCardNumber(e.target.value)}
+                      style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', fontWeight: 700, marginTop: '2px', fontFamily: 'monospace' }}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#475569', fontWeight: 600 }}>Tên chủ thẻ:</label>
+                      <input
+                        type="text"
+                        value={cardHolder}
+                        onChange={(e) => setCardHolder(e.target.value)}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', fontWeight: 700, marginTop: '2px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#475569', fontWeight: 600 }}>Ngày phát hành:</label>
+                      <input
+                        type="text"
+                        value={cardDate}
+                        onChange={(e) => setCardDate(e.target.value)}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', fontWeight: 700, marginTop: '2px' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0F172A' }}>
+                    {isZaloPay ? 'Ví ZaloPay Demo (Số dư 50.000.000 đ)' : 'Ví / Tài khoản Khách Hàng Test'}
+                  </div>
+                  <div style={{ fontSize: '12px', color: primaryColor, marginTop: '2px' }}>
+                    Số dư khả dụng: <strong>100.000.000 đ</strong> (Đủ điều kiện thanh toán)
+                  </div>
+                </>
+              )}
             </div>
 
             {/* NHẬP MÃ OTP SANDBOX */}

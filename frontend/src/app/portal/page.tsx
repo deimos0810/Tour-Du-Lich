@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import CustomerHeader from '@/components/customer/CustomerHeader';
 import CustomerFooter from '@/components/customer/CustomerFooter';
-import { api, getImageUrl, useApi, getApiUrl } from '@/lib/api';
+import { api, getImageUrl, useApi, getApiUrl, openVNPayGateway } from '@/lib/api';
 import { bookingSchema, firstError } from '@/lib/validations';
 import { ApiNotice, uiAlert, vnd } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
@@ -172,7 +172,7 @@ export default function CustomerHomePage() {
         }),
       });
       if (res.paymentUrl) {
-        window.location.href = res.paymentUrl;
+        await openVNPayGateway(res.paymentUrl, maDon);
       }
     } catch (err: any) {
       void uiAlert('Không thể kết nối cổng VNPay: ' + (err?.message || 'Lỗi kết nối'));

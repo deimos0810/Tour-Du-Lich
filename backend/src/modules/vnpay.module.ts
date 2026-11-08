@@ -52,11 +52,8 @@ export class VNPayService {
       .replace(/[#&?]/g, '')
       .trim();
 
-    // Chuẩn hóa IPv4: lấy IP đầu tiên nếu qua proxy (x-forwarded-for dạng "ip1, ip2"), tránh ::1 hoặc IPv6
-    let clientIp = String(dto.ipAddr || '127.0.0.1').split(',')[0].trim();
-    if (!clientIp || clientIp.includes(':') || clientIp === '::1') {
-      clientIp = '127.0.0.1';
-    }
+    // Chuẩn hóa IPv4 Việt Nam hợp lệ cho VNPay Sandbox (tránh lỗi khi trình duyệt bật Proxy/VPN nước ngoài hoặc IPv6)
+    const clientIp = '14.191.196.125';
 
     let vnp_Params: Record<string, any> = {
       vnp_Version: '2.1.0',

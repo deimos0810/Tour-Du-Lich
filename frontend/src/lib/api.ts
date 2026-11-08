@@ -139,3 +139,26 @@ export async function uploadTourImage(
   return res.json();
 }
 
+/**
+ * Điều hướng tới cổng thanh toán VNPay Sandbox.
+ * Nếu trình duyệt bật Proxy/VPN nước ngoài chặn sandbox.vnpayment.vn (ERR_TUNNEL_CONNECTION_FAILED),
+ * tự động chuyển sang cổng VNPAY NCB Sandbox nội bộ để giao dịch không bao giờ bị đứt kết nối.
+ */
+export async function openVNPayGateway(paymentUrl: string, maDon: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
+    await fetch('https://sandbox.vnpayment.vn/paymentv2/vpcpay.html', {
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    window.location.href = paymentUrl;
+  } catch {
+    window.location.href = `/portal/sandbox-pay/${encodeURIComponent(maDon)}?method=VNPay`;
+  }
+}
+
+

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import CustomerHeader from '@/components/customer/CustomerHeader';
 import CustomerFooter from '@/components/customer/CustomerFooter';
-import { api, downloadFile } from '@/lib/api';
+import { api, downloadFile, openVNPayGateway } from '@/lib/api';
 import { vnd, uiAlert } from '@/lib/ui';
 import { useAuth, UserSession } from '@/context/AuthContext';
 import { Printer, AlertTriangle, Check, Clock, UserCheck, Lock, Shield } from 'lucide-react';
@@ -222,7 +222,7 @@ export default function TicketDetailClient({
         }),
       });
       if (res.paymentUrl) {
-        window.location.href = res.paymentUrl;
+        await openVNPayGateway(res.paymentUrl, ticket.MaDon);
       }
     } catch (err) {
       uiAlert(err instanceof Error ? err.message : 'Không thể kết nối cổng VNPay', { type: 'error', title: 'Lỗi kết nối VNPay' });
