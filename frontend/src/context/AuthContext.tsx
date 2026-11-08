@@ -7,7 +7,8 @@ export type UserSession = {
   email: string;
   name: string;
   phone: string;
-  address?: string;
+  address?: string | null;
+  cccd?: string | null;
   roles: string[];
   primaryRole: string;
   customerId: number | null;
@@ -19,6 +20,7 @@ type AuthContextType = {
   user: UserSession | null;
   token: string | null;
   login: (user: UserSession, token: string) => void;
+  updateUser: (patch: Partial<UserSession>) => void;
   logout: () => void;
   isLoading: boolean;
 };
@@ -27,6 +29,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   token: null,
   login: () => {},
+  updateUser: () => {},
   logout: () => {},
   isLoading: true,
 });
@@ -45,8 +48,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (savedUser && savedToken) {
       try {
-        setUser(JSON.parse(savedUser));
+        const parsed = JSON.parse(savedUser) as UserSession;
+        setUser(parsed);
         setToken(savedToken);
+        // Đồng bộ ngầm thông tin mới nhất (CCCD, Địa chỉ, SĐT) từ CSDL
+        fetch('/api-proxy/auth/me', {
+          headers: { Authorization: `Bearer ${savedToken}` },
+          cache: 'no-store',
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((fresh) => {
+            if (fresh && fresh.id) {
+              setUser((prev) => {
+                const merged = { ...(prev || parsed), ...fresh };
+                localStorage.setItem('viettour_user', JSON.stringify(merged));
+                return merged;
+              });
+            }
+          })
+          .catch(() => {});
       } catch {
         localStorage.removeItem('viettour_user');
         localStorage.removeItem('viettour_token');
@@ -65,6 +85,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push(newUser.redirectUrl || '/');
   };
 
+  const updateUser = (patch: Partial<UserSession>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      localStorage.setItem('viettour_user', JSON.stringify(next));
+      return next;
+    });
+  };
+
   const logout = () => {
     setUser(null);
     setToken(null);
@@ -74,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, token, login, updateUser, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

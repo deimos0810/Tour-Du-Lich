@@ -146,7 +146,9 @@ export class AuthService {
       user: {
         id: tk.TaiKhoanID,
         email: tk.Email,
-        phone: tk.SoDienThoai,
+        phone: tk.KhachHang?.SoDienThoai || tk.SoDienThoai,
+        address: tk.KhachHang?.DiaChiGiaoHang || tk.NhanVien?.DiaChi || null,
+        cccd: tk.KhachHang?.CCCD || null,
         roles,
         primaryRole,
         name: tk.KhachHang?.HoTen || tk.NhanVien?.HoTen || tk.Email.split('@')[0],
@@ -268,7 +270,9 @@ export class AuthService {
     return {
       id: tk.TaiKhoanID,
       email: tk.Email,
-      phone: tk.SoDienThoai,
+      phone: tk.KhachHang?.SoDienThoai || tk.SoDienThoai,
+      address: tk.KhachHang?.DiaChiGiaoHang || tk.NhanVien?.DiaChi || null,
+      cccd: tk.KhachHang?.CCCD || null,
       roles,
       primaryRole,
       name: tk.KhachHang?.HoTen || tk.NhanVien?.HoTen || tk.Email.split('@')[0],
@@ -280,12 +284,25 @@ export class AuthService {
     };
   }
 
-  async updateProfile(userId: number, dto: { hoTen?: string; phone?: string; email?: string; ngaySinh?: string }) {
+  async updateProfile(
+    userId: number,
+    dto: { hoTen?: string; phone?: string; email?: string; ngaySinh?: string; address?: string; cccd?: string | null },
+  ) {
     const tk = await this.prisma.taiKhoan.findUnique({
       where: { TaiKhoanID: userId },
       include: { KhachHang: true, NhanVien: true },
     });
     if (!tk) throw new NotFoundException('Không tìm thấy tài khoản');
+
+    let normalizedCccd: string | null | undefined = undefined;
+    if (dto.cccd !== undefined) {
+      const cleaned = String(dto.cccd ?? '').trim();
+      if (cleaned !== '' && !/^\d{12}$/.test(cleaned)) {
+        throw new BadRequestException('Số CCCD / Mã định danh cá nhân phải gồm đúng 12 chữ số!');
+      }
+      normalizedCccd = cleaned === '' ? null : cleaned;
+    }
+
     if (dto.phone) {
       await this.prisma.taiKhoan.update({
         where: { TaiKhoanID: userId },
@@ -299,6 +316,8 @@ export class AuthService {
           HoTen: dto.hoTen || tk.KhachHang.HoTen,
           SoDienThoai: dto.phone || tk.KhachHang.SoDienThoai,
           NgaySinh: dto.ngaySinh ? new Date(dto.ngaySinh) : tk.KhachHang.NgaySinh,
+          ...(dto.address !== undefined ? { DiaChiGiaoHang: dto.address.trim() || null } : {}),
+          ...(normalizedCccd !== undefined ? { CCCD: normalizedCccd } : {}),
         },
       });
     }
@@ -535,7 +554,11 @@ export class AuthService {
         const defaultName = i === 0 && khachHang ? khachHang.HoTen : `Hành khách ${i + 1}`;
         const hoTen = p?.hoTen?.trim() || defaultName;
         const loaiKhach = p?.loaiKhach || (isAdult ? 'Nguoi lon' : 'Tre em');
-        const cccd = p?.cccd?.trim() || (i === 0 && khachHang?.CCCD ? khachHang.CCCD : null);
+        // Nếu hành khách 1 (i === 0) là chủ tài khoản khách hàng và đã lưu CCCD trong hồ sơ cá nhân -> luôn lấy từ hồ sơ
+        const cccd =
+          i === 0 && khachHang?.CCCD && /^\d{12}$/.test(khachHang.CCCD.trim())
+            ? khachHang.CCCD.trim()
+            : p?.cccd?.trim() || null;
         const gioiTinh = p?.gioiTinh || (i === 0 && khachHang?.GioiTinh ? khachHang.GioiTinh : 'Nam');
         const ngaySinh = p?.ngaySinh ? new Date(p.ngaySinh) : (i === 0 && khachHang?.NgaySinh ? khachHang.NgaySinh : null);
         const maQRVe = `VT-${maDon}-${i + 1}-${Date.now().toString().slice(-4)}`;
@@ -620,7 +643,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   updateProfile(
     @Req() req: { user: JwtPayload },
-    @Body() body: { hoTen?: string; phone?: string; email?: string; ngaySinh?: string },
+    @Body() body: { hoTen?: string; phone?: string; email?: string; ngaySinh?: string; address?: string; cccd?: string | null },
   ) {
     return this.service.updateProfile(req.user.sub, body);
   }

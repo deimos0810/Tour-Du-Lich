@@ -105,10 +105,30 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
   const [voucherError, setVoucherError] = useState<string | null>(null);
   const [validatingVoucher, setValidatingVoucher] = useState(false);
 
+  // CCCD đã lưu trong hồ sơ cá nhân của tài khoản khách hàng (chỉ áp dụng cho Hành khách 1 - Chủ tài khoản)
+  const ownerSavedCccd =
+    user?.customerId && user?.cccd && /^\d{12}$/.test(user.cccd.trim()) ? user.cccd.trim() : '';
+
   // Passengers list with CCCD
   const [passengers, setPassengers] = useState<PassengerInput[]>([
-    { hoTen: user?.name || '', gioiTinh: 'Nam', cccd: '' }
+    { hoTen: user?.name || '', gioiTinh: 'Nam', cccd: ownerSavedCccd }
   ]);
+
+  useEffect(() => {
+    if (!ownerSavedCccd && !user?.name) return;
+    setPassengers((prev) => {
+      if (prev.length === 0) return prev;
+      const nextFirst = {
+        ...prev[0],
+        hoTen: prev[0].hoTen || user?.name || '',
+        cccd: ownerSavedCccd || prev[0].cccd,
+      };
+      if (nextFirst.hoTen === prev[0].hoTen && nextFirst.cccd === prev[0].cccd) return prev;
+      const next = [...prev];
+      next[0] = nextFirst;
+      return next;
+    });
+  }, [ownerSavedCccd, user?.name]);
 
   // Modal Thanh toán sau khi đặt tour thành công
   const [createdBooking, setCreatedBooking] = useState<{ MaDon: string; TongTien: number; DonHangID: number } | null>(null);
@@ -1162,6 +1182,7 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                             <span style={{ fontSize: '12px', fontWeight: 600, color: '#334155' }}>
                               Hành khách {idx + 1} • {isAdult ? 'Người lớn' : 'Trẻ em'}
+                              {idx === 0 && user?.customerId ? ' (Chủ tài khoản)' : ''}
                             </span>
                             {isValid ? (
                               <span style={{ fontSize: '11px', color: '#047857', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
@@ -1196,34 +1217,90 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
                               }}
                             />
 
-                            <div>
-                              <input
-                                className="input"
-                                placeholder="Số CCCD / Mã định danh (đủ 12 chữ số)"
-                                maxLength={12}
-                                value={p.cccd}
-                                required
-                                onChange={(e) => {
-                                  const val = e.target.value.replace(/\D/g, '');
-                                  setPassengers((prev) => {
-                                    const next = [...prev];
-                                    next[idx].cccd = val;
-                                    return next;
-                                  });
-                                }}
-                                style={{
-                                  fontSize: '12.5px',
-                                  padding: '7px 10px',
-                                  width: '100%',
-                                  background: '#FFFFFF',
-                                }}
-                              />
-                              {p.cccd.trim().length > 0 && p.cccd.trim().length < 12 && (
-                                <div style={{ fontSize: '11px', color: '#B45309', marginTop: '3px' }}>
-                                  Đã nhập {p.cccd.trim().length}/12 chữ số
+                            {idx === 0 && ownerSavedCccd ? (
+                              <div>
+                                <div style={{ position: 'relative' }}>
+                                  <input
+                                    className="input"
+                                    readOnly
+                                    value={ownerSavedCccd}
+                                    title="Số CCCD của chủ tài khoản được lấy tự động từ Thông tin cá nhân"
+                                    style={{
+                                      fontSize: '12.5px',
+                                      padding: '7px 32px 7px 10px',
+                                      width: '100%',
+                                      fontFamily: 'monospace',
+                                      fontWeight: 700,
+                                      letterSpacing: '0.8px',
+                                      background: '#F1F5F9',
+                                      color: '#0F172A',
+                                      borderColor: '#94A3B8',
+                                      cursor: 'not-allowed',
+                                    }}
+                                  />
+                                  <Lock
+                                    size={13}
+                                    style={{
+                                      position: 'absolute',
+                                      right: '10px',
+                                      top: '50%',
+                                      transform: 'translateY(-50%)',
+                                      color: '#475569',
+                                    }}
+                                  />
                                 </div>
-                              )}
-                            </div>
+                                <div style={{ fontSize: '11px', color: '#475569', marginTop: '4px', lineHeight: 1.4 }}>
+                                  Tự động điền từ hồ sơ của bạn (Khóa chỉnh sửa). Đổi tại{' '}
+                                  <Link href="/portal/account" style={{ color: '#0284C7', fontWeight: 700, textDecoration: 'underline' }}>
+                                    Thông tin cá nhân
+                                  </Link>
+                                  .
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <input
+                                  className="input"
+                                  placeholder={
+                                    idx === 0
+                                      ? 'Số CCCD của bạn (đủ 12 chữ số)'
+                                      : `Số CCCD hành khách ${idx + 1} (đủ 12 chữ số)`
+                                  }
+                                  maxLength={12}
+                                  value={p.cccd}
+                                  required
+                                  onChange={(e) => {
+                                    const val = e.target.value.replace(/\D/g, '');
+                                    setPassengers((prev) => {
+                                      const next = [...prev];
+                                      next[idx].cccd = val;
+                                      return next;
+                                    });
+                                  }}
+                                  style={{
+                                    fontSize: '12.5px',
+                                    padding: '7px 10px',
+                                    width: '100%',
+                                    background: '#FFFFFF',
+                                    fontFamily: 'monospace',
+                                  }}
+                                />
+                                {p.cccd.trim().length > 0 && p.cccd.trim().length < 12 && (
+                                  <div style={{ fontSize: '11px', color: '#B45309', marginTop: '3px' }}>
+                                    Đã nhập {p.cccd.trim().length}/12 chữ số
+                                  </div>
+                                )}
+                                {idx === 0 && user?.customerId && (
+                                  <div style={{ fontSize: '11px', color: '#64748B', marginTop: '3px' }}>
+                                    Gợi ý: Lưu sẵn CCCD tại{' '}
+                                    <Link href="/portal/account" style={{ color: '#0284C7', fontWeight: 600, textDecoration: 'underline' }}>
+                                      Thông tin cá nhân
+                                    </Link>{' '}
+                                    để tự động điền lần sau.
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
