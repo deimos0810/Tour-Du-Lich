@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { downloadFile, useApi } from '@/lib/api';
-import { ApiNotice, vnd } from '@/lib/ui';
+import { ApiNotice, vnd, uiAlert } from '@/lib/ui';
 import { TrendingUp, Trophy, Users, BarChart3, Star, CalendarDays, Filter } from 'lucide-react';
 
 type QuarterlyTourStat = {
@@ -70,7 +70,7 @@ export default function ReportsPage() {
     try {
       await downloadFile('/export/reports/excel', 'bao-cao-tai-chinh.xlsx');
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Không thể xuất file Excel');
+      uiAlert(e instanceof Error ? e.message : 'Không thể xuất file Excel', { type: 'error', title: 'Lỗi xuất Excel' });
     } finally {
       setExporting(false);
     }

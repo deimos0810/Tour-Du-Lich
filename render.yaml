@@ -16,6 +16,7 @@ services:
     plan: free
     region: singapore
     rootDir: backend
+    healthCheckPath: /api/health
     buildCommand: npm install --include=dev && npm run build && npx prisma db push --accept-data-loss
     startCommand: npm run start:prod
     envVars:
@@ -29,6 +30,10 @@ services:
         value: production
       - key: PORT
         value: 4000
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        value: "VietTour <onboarding@resend.dev>"
 
   - type: web
     name: viettour-frontend
@@ -36,6 +41,7 @@ services:
     plan: free
     region: singapore
     rootDir: frontend
+    healthCheckPath: /api/health
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start
     envVars:

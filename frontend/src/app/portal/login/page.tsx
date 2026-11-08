@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { uiAlert } from '@/lib/ui';
 
 export default function CustomerLoginPage() {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function CustomerLoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      alert(`Đăng nhập thành công! Xin chào ${res.user.name}`);
+      uiAlert(`Đăng nhập thành công! Xin chào ${res.user.name}`, { type: 'success', title: 'Đăng nhập thành công' });
       router.push('/portal/my-bookings');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Đăng nhập thất bại');

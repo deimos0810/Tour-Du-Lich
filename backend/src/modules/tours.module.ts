@@ -20,7 +20,7 @@ export class ToursService {
         ],
       }),
       ...(q.danhMucId && { DanhMucID: Number(q.danhMucId) }),
-      ...(q.trangThai && { TrangThaiDuyet: q.trangThai }),
+      TrangThaiDuyet: q.trangThai ? q.trangThai : { not: 'Da xoa' },
       ...(q.diemDen && { DiemDen: { contains: q.diemDen, mode: 'insensitive' } }),
     };
     const rows = await this.prisma.tour.findMany({
@@ -155,11 +155,74 @@ export class ToursService {
   }
 
   async remove(id: number) {
-    const soLich = await this.prisma.lichKhoiHanh.count({ where: { TourID: id } });
-    if (soLich > 0) {
-      throw new BadRequestException(`Tour đã có ${soLich} lịch khởi hành — không thể xóa. Hãy chuyển trạng thái sang "Đóng bán".`);
+    const tour = await this.prisma.tour.findUnique({
+      where: { TourID: id },
+      include: {
+        LichKhoiHanh: {
+          include: {
+            _count: {
+              select: {
+                DonDatTour: true,
+                PhieuDatDichVu: true,
+              },
+            },
+            BaoCaoQuyetToan: { select: { QuyetToanID: true } },
+          },
+        },
+      },
+    });
+    if (!tour) throw new NotFoundException('Không tìm thấy tour cần xóa');
+
+    const soDon = tour.LichKhoiHanh.reduce((sum, l) => sum + l._count.DonDatTour, 0);
+    const soPhieuNCC = tour.LichKhoiHanh.reduce((sum, l) => sum + l._count.PhieuDatDichVu, 0);
+    const soQuyetToan = tour.LichKhoiHanh.filter((l) => Boolean(l.BaoCaoQuyetToan)).length;
+
+    // Trường hợp 1: Tour đã phát sinh đơn đặt tour của khách hàng hoặc chứng từ tài chính
+    // -> Lưu trữ an toàn (Archive) để xóa khỏi danh sách mở bán nhưng BẢO TOÀN 100%
+    //    thông tin Tên tour, Mã tour, Lịch khởi hành cho các khách hàng đã đăng ký trước đó.
+    if (soDon > 0 || soPhieuNCC > 0 || soQuyetToan > 0) {
+      return this.prisma.$transaction(async (tx) => {
+        const lichIds = tour.LichKhoiHanh.map((l) => l.LichID);
+        if (lichIds.length > 0) {
+          await tx.lichKhoiHanh.updateMany({
+            where: { LichID: { in: lichIds }, SoChoDaDat: 0, TrangThai: 'Cho khoi hanh' },
+            data: { TrangThai: 'Dong' },
+          });
+        }
+        const archived = await tx.tour.update({
+          where: { TourID: id },
+          data: { TrangThaiDuyet: 'Da xoa', NgayCapNhat: new Date() },
+        });
+        return {
+          ...archived,
+          deleted: true,
+          mode: 'ARCHIVE_PROTECTED',
+          soDonBaoLuu: soDon,
+          message: `Đã xóa tour "${tour.TenTour}" (${tour.MaTour}) khỏi danh sách mở bán. Dữ liệu lịch sử của ${soDon} đơn đặt tour khách hàng đã đăng ký trước đó (Tên tour, Mã tour, Lịch khởi hành, Vé điện tử) vẫn được bảo toàn 100%!`,
+        };
+      });
     }
-    return this.prisma.tour.delete({ where: { TourID: id } });
+
+    // Trường hợp 2: Tour mẫu / Tour mới tạo chưa có bất kỳ khách hàng nào đặt -> Xóa vật lý (Hard Delete)
+    return this.prisma.$transaction(async (tx) => {
+      const lichIds = tour.LichKhoiHanh.map((l) => l.LichID);
+      if (lichIds.length > 0) {
+        await tx.dieuPhoiTour.deleteMany({ where: { LichID: { in: lichIds } } });
+        await tx.chiPhiPhatSinh.deleteMany({ where: { LichID: { in: lichIds } } });
+        await tx.lichKhoiHanh.deleteMany({ where: { TourID: id } });
+      }
+      await tx.danhGia.deleteMany({ where: { TourID: id } });
+      await tx.apDungVoucher.deleteMany({ where: { TourID: id } });
+      await tx.apDungChuongTrinhKM.deleteMany({ where: { TourID: id } });
+      const deleted = await tx.tour.delete({ where: { TourID: id } });
+      return {
+        ...deleted,
+        deleted: true,
+        mode: 'HARD_DELETE',
+        soDonBaoLuu: 0,
+        message: `Đã xóa hoàn toàn tour "${tour.TenTour}" (${tour.MaTour}) khỏi hệ thống!`,
+      };
+    });
   }
 
   categories() {

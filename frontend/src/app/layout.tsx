@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { AuthProvider } from '@/context/AuthContext';
 import AppShell from '@/components/AppShell';
+import { UiFeedbackRoot } from '@/lib/ui';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin', 'vietnamese'], variable: '--font-inter' });
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AuthProvider>
           <AppShell>{children}</AppShell>
+          <UiFeedbackRoot />
         </AuthProvider>
       </body>
     </html>

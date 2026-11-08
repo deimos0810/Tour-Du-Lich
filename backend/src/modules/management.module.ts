@@ -387,8 +387,11 @@ export class GuideOpsService {
     };
   }
 
-  /** Điểm danh hàng loạt hoặc thiết lập lại trạng thái */
+  /** Điểm danh hàng loạt cho đoàn (chỉ cho phép điểm danh, không được phép hủy điểm danh) */
   async batchCheckin(lichId: number, status: number) {
+    if (status !== 1) {
+      throw new BadRequestException('Hành khách đã điểm danh không được phép chỉnh lại thành chưa điểm danh!');
+    }
     const dons = await this.prisma.donDatTour.findMany({
       where: { LichID: lichId, TrangThaiDon: { not: 'Da huy' } },
       select: { DonHangID: true },
@@ -397,13 +400,13 @@ export class GuideOpsService {
     if (!donIds.length) return { message: 'Không có booking nào', count: 0 };
 
     const res = await this.prisma.chiTietHanhKhach.updateMany({
-      where: { DonHangID: { in: donIds } },
-      data: { TrangThaiDiemDanh: status },
+      where: { DonHangID: { in: donIds }, TrangThaiDiemDanh: { not: 1 } },
+      data: { TrangThaiDiemDanh: 1 },
     });
     return {
-      message: status === 1 ? `Đã điểm danh tất cả ${res.count} hành khách` : `Đã hủy điểm danh ${res.count} hành khách`,
+      message: `Đã điểm danh tất cả hành khách trong đoàn (${res.count} khách mới)`,
       count: res.count,
-      status,
+      status: 1,
     };
   }
 
@@ -437,12 +440,20 @@ export class GuideOpsService {
   }
 
   async togglePaxCheckin(paxId: number) {
-    const pax = await this.prisma.chiTietHanhKhach.findUnique({ where: { ChiTietID: paxId } });
+    const pax = await this.prisma.chiTietHanhKhach.findUnique({
+      where: { ChiTietID: paxId },
+      include: { DonDatTour: true },
+    });
     if (!pax) throw new NotFoundException('Không tìm thấy hành khách');
-    const nextStatus = pax.TrangThaiDiemDanh === 1 ? 0 : 1;
+    if (pax.TrangThaiDiemDanh === 1) {
+      throw new BadRequestException('Hành khách này đã được điểm danh lên đoàn, không được phép chỉnh lại thành chưa điểm danh!');
+    }
+    if (pax.DonDatTour && !['Da thanh toan', 'Da xac nhan', 'Dang thuc hien', 'Hoan thanh', 'Da dat coc'].includes(pax.DonDatTour.TrangThaiDon)) {
+      throw new BadRequestException('Đơn đặt tour chưa hoàn tất thanh toán nên chưa thể điểm danh!');
+    }
     return this.prisma.chiTietHanhKhach.update({
       where: { ChiTietID: paxId },
-      data: { TrangThaiDiemDanh: nextStatus },
+      data: { TrangThaiDiemDanh: 1 },
     });
   }
 }

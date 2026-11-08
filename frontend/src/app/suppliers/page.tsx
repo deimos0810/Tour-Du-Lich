@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { api, useApi } from '@/lib/api';
-import { ApiNotice, EmptyRow, Status, date, vnd } from '@/lib/ui';
+import { ApiNotice, EmptyRow, Status, date, vnd, uiAlert, uiConfirm, uiPrompt } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
 import {
   Building2,
@@ -148,12 +148,17 @@ export default function SuppliersPage() {
   // Thao tác đổi trạng thái hợp tác NCC
   const handleToggleSupplier = async (s: Supplier) => {
     const action = s.TrangThai === 0 ? 'mở lại hợp tác với' : 'tạm dừng hợp tác với';
-    if (!confirm(`Bạn có chắc muốn ${action} nhà cung cấp "${s.TenNCC}"?`)) return;
+    const ok = await uiConfirm(`Bạn có chắc muốn ${action} nhà cung cấp "${s.TenNCC}"?`, {
+      title: 'Cập nhật trạng thái hợp tác NCC',
+      confirmText: s.TrangThai === 0 ? 'Mở lại hợp tác' : 'Tạm dừng hợp tác',
+      danger: s.TrangThai !== 0,
+    });
+    if (!ok) return;
     try {
       await api(`/suppliers/${s.NhaCungCapID}/toggle`, { method: 'PATCH' });
       void suppliersApi.reload();
     } catch (err: any) {
-      alert(err?.message || 'Không thể thay đổi trạng thái nhà cung cấp');
+      uiAlert(err?.message || 'Không thể thay đổi trạng thái nhà cung cấp', { type: 'error' });
     }
   };
 
@@ -161,22 +166,31 @@ export default function SuppliersPage() {
   const handleUpdateOrderStatus = async (orderId: number, nextStatus: string) => {
     let lyDoTuChoi: string | undefined = undefined;
     if (nextStatus === 'NCC tu choi') {
-      const reason = prompt('Nhập lý do NCC từ chối (hết phòng, xe bảo dưỡng...):');
+      const reason = await uiPrompt('Nhập lý do NCC từ chối (hết phòng, xe bảo dưỡng...):', {
+        title: 'Lý do nhà cung cấp từ chối',
+        placeholder: 'VD: Khách sạn kín phòng dịp lễ...',
+        confirmText: 'Xác nhận từ chối',
+      });
       if (!reason) return;
       lyDoTuChoi = reason;
     } else if (nextStatus === 'Da huy') {
-      if (!confirm('Xác nhận hủy phiếu đặt dịch vụ này? Chi phí sẽ không còn tính vào quyết toán chuyến.')) return;
+      const ok = await uiConfirm('Xác nhận hủy phiếu đặt dịch vụ này? Chi phí sẽ không còn tính vào quyết toán chuyến.', {
+        title: 'Xác nhận hủy phiếu đặt dịch vụ',
+        confirmText: 'Hủy phiếu',
+        danger: true,
+      });
+      if (!ok) return;
     }
     try {
       await api(`/service-orders/${orderId}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ trangThai: nextStatus, lyDoTuChoi }),
       });
-      alert(`Đã cập nhật trạng thái phiếu thành "${nextStatus}"`);
+      uiAlert(`Đã cập nhật trạng thái phiếu thành "${nextStatus}"`, { type: 'success' });
       setSelectedOrder(null);
       void ordersApi.reload();
     } catch (err: any) {
-      alert(err?.message || 'Lỗi cập nhật trạng thái phiếu');
+      uiAlert(err?.message || 'Lỗi cập nhật trạng thái phiếu', { type: 'error' });
     }
   };
 
@@ -212,11 +226,11 @@ export default function SuppliersPage() {
 
   const handleSaveOrder = async () => {
     if (!selectedLichId || !selectedSupplierId) {
-      alert('Vui lòng chọn chuyến đi và nhà cung cấp!');
+      uiAlert('Vui lòng chọn chuyến đi và nhà cung cấp!', { type: 'warning' });
       return;
     }
     if (orderItems.length === 0) {
-      alert('Vui lòng chọn ít nhất 1 dịch vụ / loại phòng!');
+      uiAlert('Vui lòng chọn ít nhất 1 dịch vụ / loại phòng!', { type: 'warning' });
       return;
     }
 
@@ -234,11 +248,11 @@ export default function SuppliersPage() {
         }),
       });
 
-      alert('Tạo phiếu đặt dịch vụ nhà cung cấp thành công!');
+      uiAlert('Tạo phiếu đặt dịch vụ nhà cung cấp thành công!', { type: 'success' });
       setIsCreateModalOpen(false);
       void ordersApi.reload();
     } catch (err: any) {
-      alert(err?.message || 'Lỗi khi tạo phiếu đặt dịch vụ');
+      uiAlert(err?.message || 'Lỗi khi tạo phiếu đặt dịch vụ', { type: 'error' });
     } finally {
       setCreating(false);
     }
@@ -704,7 +718,7 @@ export default function SuppliersPage() {
               <button
                 className="btn btn-primary"
                 onClick={() => {
-                  alert(`Đã xuất phiếu chi & bảng kê dịch vụ ${selectedOrder.MaPhieu} thành công!`);
+                  uiAlert(`Đã xuất phiếu chi & bảng kê dịch vụ ${selectedOrder.MaPhieu} thành công!`, { type: 'success' });
                   setSelectedOrder(null);
                 }}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}

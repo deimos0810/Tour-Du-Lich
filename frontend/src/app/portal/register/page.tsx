@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { uiAlert } from '@/lib/ui';
 
 export default function CustomerRegisterPage() {
   const router = useRouter();
@@ -25,7 +26,10 @@ export default function CustomerRegisterPage() {
         body: JSON.stringify({ email, password, hoTen, phone, cccd }),
       });
 
-      alert('Đăng ký tài khoản khách hàng thành công! Bạn có thể đăng nhập ngay.');
+      uiAlert('Đăng ký tài khoản khách hàng thành công! Bạn có thể đăng nhập ngay.', {
+        type: 'success',
+        title: 'Đăng ký thành công',
+      });
       router.push('/portal/login');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Đăng ký thất bại');

@@ -65,10 +65,10 @@ export default function BookingsPage() {
     `/bookings?trangThai=${encodeURIComponent(status)}&search=${encodeURIComponent(search)}`,
   );
 
-  // State Modal Thu tiền / Xác nhận thanh toán tại quầy (thay cho hộp thoại prompt)
+  // State Modal Thu tiền / Xác nhận thanh toán trực tuyến
   const [collectingBooking, setCollectingBooking] = useState<Booking | null>(null);
   const [collectAmount, setCollectAmount] = useState<string>('');
-  const [collectMethod, setCollectMethod] = useState<'Tien mat' | 'Chuyen khoan' | 'VNPay'>('Tien mat');
+  const [collectMethod, setCollectMethod] = useState<'VNPay' | 'Chuyen khoan'>('VNPay');
   const [collectNote, setCollectNote] = useState<string>('');
   const [collectError, setCollectError] = useState<string>('');
   const [submittingCollect, setSubmittingCollect] = useState(false);
@@ -95,12 +95,8 @@ export default function BookingsPage() {
     const remaining = getRemainingAmount(b);
     setCollectingBooking(b);
     setCollectAmount(String(Math.round(remaining)));
-    setCollectMethod(b.PhuongThucTT === 'Chuyen khoan' ? 'Chuyen khoan' : 'Tien mat');
-    setCollectNote(
-      b.PhuongThucTT === 'Tien mat'
-        ? `Xác nhận đã thu đủ tiền mặt tại quầy giao dịch VietTour cho đơn ${b.MaDon}`
-        : `Xác nhận thu tiền đơn ${b.MaDon}`,
-    );
+    setCollectMethod(b.PhuongThucTT === 'Chuyen khoan' ? 'Chuyen khoan' : 'VNPay');
+    setCollectNote(`Xác nhận thu tiền thanh toán đơn ${b.MaDon}`);
     setCollectError('');
   };
 
@@ -183,7 +179,7 @@ export default function BookingsPage() {
         <div>
           <h1 className="page-title">Booking & Đặt Cọc</h1>
           <p className="page-desc">
-            Quản lý giao dịch đặt tour theo thời gian thực (Timestamp), xác nhận thu tiền mặt tại quầy và theo dõi thanh toán VNPAY
+            Quản lý giao dịch đặt tour theo thời gian thực (Timestamp) và đối soát thanh toán qua Cổng VNPAY
           </p>
         </div>
       </div>
@@ -277,8 +273,6 @@ export default function BookingsPage() {
             <tbody>
               {data?.length ? (
                 data.map((b) => {
-                  const isCashRequested =
-                    b.PhuongThucTT === 'Tien mat' || (b.GhiChu && b.GhiChu.includes('[ĐĂNG KÝ TIỀN MẶT TẠI QUẦY]'));
                   const netPayable = Math.max(0, Number(b.TongTien) - Number(b.GiamGia || 0));
                   const lastPayment = b.ThanhToan?.[0];
 
@@ -344,26 +338,7 @@ export default function BookingsPage() {
                                 border: '1px solid #CBD5E1',
                               }}
                             >
-                              {b.PhuongThucTT === 'Tien mat'
-                                ? 'Tiền mặt tại quầy'
-                                : b.PhuongThucTT === 'VNPay'
-                                ? 'Cổng VNPAY'
-                                : b.PhuongThucTT || 'Chuyển khoản'}
-                            </span>
-                          ) : isCashRequested && b.TrangThaiDon !== 'Da huy' ? (
-                            <span
-                              style={{
-                                display: 'inline-block',
-                                fontSize: '11px',
-                                padding: '2px 7px',
-                                borderRadius: '4px',
-                                background: '#FFFBEB',
-                                color: '#B45309',
-                                fontWeight: 700,
-                                border: '1px solid #FDE68A',
-                              }}
-                            >
-                              Khách chọn: Tiền mặt tại quầy
+                              {b.PhuongThucTT === 'VNPay' ? 'Cổng VNPAY' : b.PhuongThucTT || 'Cổng VNPAY'}
                             </span>
                           ) : (
                             <span style={{ fontSize: '11px', color: '#94A3B8' }}>Chưa thanh toán</span>
@@ -400,15 +375,11 @@ export default function BookingsPage() {
                         {b.TrangThaiDon !== 'Da huy' && b.TrangThaiDon !== 'Da thanh toan' && (
                           <div style={{ display: 'inline-flex', gap: '6px' }}>
                             <button
-                              className={isCashRequested ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm'}
+                              className="btn btn-outline btn-sm"
                               onClick={() => openCollectModal(b)}
-                              style={
-                                isCashRequested
-                                  ? { background: '#0F172A', borderColor: '#0F172A', fontWeight: 600 }
-                                  : { fontWeight: 600 }
-                              }
+                              style={{ fontWeight: 600 }}
                             >
-                              {isCashRequested ? 'Xác nhận đã thu' : 'Thu tiền'}
+                              Xác nhận thu
                             </button>
                             <button
                               className="btn btn-danger-outline btn-sm"
@@ -586,13 +557,13 @@ export default function BookingsPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                       <button
                         type="button"
-                        onClick={() => setCollectMethod('Tien mat')}
+                        onClick={() => setCollectMethod('VNPay')}
                         style={{
                           padding: '10px 12px',
                           borderRadius: '8px',
-                          border: collectMethod === 'Tien mat' ? '1.5px solid #0F172A' : '1px solid #CBD5E1',
-                          background: collectMethod === 'Tien mat' ? '#0F172A' : '#FFFFFF',
-                          color: collectMethod === 'Tien mat' ? '#FFFFFF' : '#334155',
+                          border: collectMethod === 'VNPay' ? '1.5px solid #0F172A' : '1px solid #CBD5E1',
+                          background: collectMethod === 'VNPay' ? '#0F172A' : '#FFFFFF',
+                          color: collectMethod === 'VNPay' ? '#FFFFFF' : '#334155',
                           fontWeight: 700,
                           fontSize: '12.5px',
                           cursor: 'pointer',
@@ -602,8 +573,8 @@ export default function BookingsPage() {
                           gap: '6px',
                         }}
                       >
-                        <Banknote size={15} />
-                        Tiền mặt tại quầy
+                        <CreditCard size={15} />
+                        Cổng thanh toán VNPAY
                       </button>
                       <button
                         type="button"
@@ -623,8 +594,8 @@ export default function BookingsPage() {
                           gap: '6px',
                         }}
                       >
-                        <CreditCard size={15} />
-                        Chuyển khoản / Quẹt thẻ POS
+                        <Banknote size={15} />
+                        Chuyển khoản ngân hàng
                       </button>
                     </div>
                   </div>
@@ -709,7 +680,7 @@ export default function BookingsPage() {
                       className="input"
                       value={collectNote}
                       onChange={(e) => setCollectNote(e.target.value)}
-                      placeholder="VD: Đã thu tiền mặt tại Quầy Sân bay Tân Sơn Nhất..."
+                      placeholder="VD: Đối soát giao dịch thanh toán VNPay / Ủy nhiệm chi..."
                       style={{ width: '100%', fontSize: '13px', padding: '8px 12px' }}
                     />
                   </div>

@@ -2,6 +2,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { uiAlert } from '@/lib/ui';
 import { AlertTriangle, Check, QrCode, Calendar, Users, X, ShieldCheck } from 'lucide-react';
 
 function SandboxPayContent() {
@@ -44,7 +45,7 @@ function SandboxPayContent() {
 
   const handleConfirmPay = async () => {
     if (!otp || otp.length < 6) {
-      alert('Vui lòng nhập mã OTP 6 số để xác thực giao dịch!');
+      uiAlert('Vui lòng nhập mã OTP 6 số để xác thực giao dịch!', { type: 'warning', title: 'Thiếu mã OTP' });
       return;
     }
 

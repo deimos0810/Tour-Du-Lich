@@ -5,7 +5,7 @@ import CustomerHeader from '@/components/customer/CustomerHeader';
 import CustomerFooter from '@/components/customer/CustomerFooter';
 import CustomerAccountLayout from '@/components/customer/CustomerAccountLayout';
 import { useApi, api, downloadFile, getImageUrl, getApiUrl } from '@/lib/api';
-import { Status, vnd, date } from '@/lib/ui';
+import { Status, vnd, date, uiAlert } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
 import { CreditCard, QrCode, X, Check, Plane, Star, AlertTriangle, ShieldCheck, Smartphone, Lock } from 'lucide-react';
 
@@ -184,29 +184,7 @@ export default function MyBookingsPage() {
         window.location.href = res.paymentUrl;
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Không thể kết nối cổng VNPay Sandbox');
-    } finally {
-      setLoadingPay(false);
-    }
-  };
-
-  // Xác nhận đăng ký nộp tiền mặt tại quầy (chờ Admin xác nhận thu)
-  const handleConfirmCashAtCounter = async (booking: Booking) => {
-    setLoadingPay(true);
-    try {
-      await api(`/bookings/${booking.DonHangID}/request-cash`, {
-        method: 'POST',
-        body: JSON.stringify({
-          ghiChu: `Khách xác nhận nộp tiền mặt tại quầy giao dịch VietTour cho đơn ${booking.MaDon}`,
-        }),
-      });
-      setPayModalBooking(null);
-      setToastMsg(
-        `Đã đăng ký thanh toán tiền mặt tại quầy cho đơn ${booking.MaDon}! Khi thu ngân/Admin xác nhận đã thu, trạng thái sẽ chuyển sang "Đã thanh toán".`,
-      );
-      void bookingsApi.reload();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Không thể ghi nhận yêu cầu thanh toán tại quầy');
+      void uiAlert(err instanceof Error ? err.message : 'Không thể kết nối cổng VNPay Sandbox');
     } finally {
       setLoadingPay(false);
     }
@@ -229,7 +207,7 @@ export default function MyBookingsPage() {
         window.location.href = res.order_url;
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Không thể kết nối cổng ZaloPay Sandbox');
+      void uiAlert(err instanceof Error ? err.message : 'Không thể kết nối cổng ZaloPay Sandbox');
     } finally {
       setLoadingPay(false);
     }
@@ -246,7 +224,7 @@ export default function MyBookingsPage() {
       const data = await api<any>(`/portal/bookings/${booking.DonHangID}/cancel-preview${query}`);
       setCancelPreview(data);
     } catch (e: any) {
-      alert(e.message || 'Lỗi kiểm tra điều kiện hủy tour');
+      void uiAlert(e.message || 'Lỗi kiểm tra điều kiện hủy tour');
       setCancelModalBooking(null);
     }
   };
@@ -255,7 +233,7 @@ export default function MyBookingsPage() {
   const handleConfirmCancel = async () => {
     if (!cancelModalBooking) return;
     if (!cancelReason.trim()) {
-      alert('Vui lòng nhập lý do hủy tour!');
+      void uiAlert('Vui lòng nhập lý do hủy tour!');
       return;
     }
     setLoadingCancel(true);
@@ -277,7 +255,7 @@ export default function MyBookingsPage() {
       setCancelModalBooking(null);
       void bookingsApi.reload();
     } catch (err: any) {
-      alert(err.message || 'Hủy đơn không thành công');
+      void uiAlert(err.message || 'Hủy đơn không thành công');
     } finally {
       setLoadingCancel(false);
     }
@@ -287,7 +265,7 @@ export default function MyBookingsPage() {
   const handleSubmitReview = async () => {
     if (!reviewModalBooking) return;
     if (!reviewComment.trim()) {
-      alert('Vui lòng nhập lời nhận xét của bạn về chuyến đi!');
+      void uiAlert('Vui lòng nhập lời nhận xét của bạn về chuyến đi!');
       return;
     }
     setLoadingReview(true);
@@ -309,7 +287,7 @@ export default function MyBookingsPage() {
       setReviewComment('');
       bookingsApi.reload();
     } catch (err: any) {
-      alert(err.message || 'Không thể gửi đánh giá');
+      void uiAlert(err.message || 'Không thể gửi đánh giá');
     } finally {
       setLoadingReview(false);
     }
@@ -409,7 +387,7 @@ export default function MyBookingsPage() {
             <div>
               <h2 style={{ fontSize: '22px', fontWeight: 900, color: '#0F172A', marginBottom: '4px' }}>Đơn Đặt Tour Của Tôi</h2>
               <p style={{ fontSize: '13px', color: '#64748B', margin: 0 }}>
-                Quản lý hành trình, thanh toán trực tuyến VNPay hoặc giữ chỗ tại quầy, xuất vé điện tử QR Code
+                Quản lý hành trình, thanh toán trực tuyến qua cổng VNPAY và xuất vé điện tử QR Code
               </p>
             </div>
             <Link href="/portal" className="btn btn-outline btn-sm" style={{ fontWeight: 700, color: '#005BAA' }}>
@@ -455,22 +433,6 @@ export default function MyBookingsPage() {
                       <span style={{ fontSize: '12.5px', color: '#64748B' }}>
                         • Đặt lúc: {new Date(b.NgayDat).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ngày {date(b.NgayDat)}
                       </span>
-                      {b.TrangThaiDon === 'Cho thanh toan' &&
-                        (b.PhuongThucTT === 'Tien mat' || (b.GhiChu && b.GhiChu.includes('[ĐĂNG KÝ TIỀN MẶT TẠI QUẦY]'))) && (
-                          <span
-                            style={{
-                              fontSize: '11.5px',
-                              padding: '2px 8px',
-                              borderRadius: '6px',
-                              background: '#F1F5F9',
-                              color: '#0F172A',
-                              border: '1px solid #CBD5E1',
-                              fontWeight: 700,
-                            }}
-                          >
-                            Đã đăng ký nộp Tiền mặt tại quầy (Chờ Admin xác nhận thu)
-                          </span>
-                        )}
                     </div>
                     <Status value={getEffectiveStatus(b)} />
                   </div>
@@ -651,148 +613,53 @@ export default function MyBookingsPage() {
               </div>
             </div>
 
-            {/* TAB CHUYỂN ĐỔI: VNPAY vs TIỀN MẶT TẠI QUẦY */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '16px', background: '#F1F5F9', padding: '4px', borderRadius: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '12px',
+                padding: '12px 14px',
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '10px',
+                fontSize: '12.5px',
+                color: '#475569',
+                lineHeight: 1.5,
+              }}>
+                <ShieldCheck size={20} color="#0F172A" style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '2px' }}>
+                    Cổng thanh toán trực tuyến VNPAY
+                  </div>
+                  <div>
+                    Hỗ trợ ứng dụng Ngân hàng quét VNPAY-QR, Thẻ ATM nội địa (Napas) và Thẻ quốc tế (Visa, Master, JCB). Vé điện tử &amp; Mã QR lên đoàn sẽ được kích hoạt ngay sau khi thanh toán thành công.
+                  </div>
+                </div>
+              </div>
+
               <button
-                onClick={() => setPayTab('VNPAY')}
+                onClick={() => handlePayVNPayDirect(payModalBooking)}
+                disabled={loadingPay}
+                className="btn btn-primary"
                 style={{
-                  padding: '9px 8px',
-                  border: 'none',
-                  borderRadius: '6px',
-                  background: payTab === 'VNPAY' ? '#0F172A' : 'transparent',
-                  color: payTab === 'VNPAY' ? '#FFFFFF' : '#475569',
+                  width: '100%',
+                  padding: '13px',
+                  background: '#0F172A',
+                  borderColor: '#0F172A',
                   fontWeight: 700,
-                  fontSize: '12.5px',
+                  fontSize: '14px',
+                  borderRadius: '8px',
                   cursor: 'pointer',
-                  transition: 'all 0.15s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
                 }}
               >
-                Cổng VNPAY (QR / ATM / Thẻ)
-              </button>
-              <button
-                onClick={() => setPayTab('CASH_CARD')}
-                style={{
-                  padding: '9px 8px',
-                  border: 'none',
-                  borderRadius: '6px',
-                  background: payTab === 'CASH_CARD' ? '#0F172A' : 'transparent',
-                  color: payTab === 'CASH_CARD' ? '#FFFFFF' : '#475569',
-                  fontWeight: 700,
-                  fontSize: '12.5px',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                }}
-              >
-                Thanh toán tại quầy
+                <Lock size={15} />
+                {loadingPay ? 'Đang kết nối cổng VNPay...' : 'Thanh toán qua VNPAY →'}
               </button>
             </div>
-
-            {/* TAB 1: CỔNG VNPAY */}
-            {payTab === 'VNPAY' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '12px',
-                  padding: '12px 14px',
-                  background: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '10px',
-                  fontSize: '12.5px',
-                  color: '#475569',
-                  lineHeight: 1.5,
-                }}>
-                  <ShieldCheck size={20} color="#0F172A" style={{ flexShrink: 0, marginTop: '2px' }} />
-                  <div>
-                    <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '2px' }}>
-                      Cổng thanh toán trực tuyến VNPAY
-                    </div>
-                    <div>
-                      Hỗ trợ ứng dụng Ngân hàng quét VNPAY-QR, Thẻ ATM nội địa (Napas) và Thẻ quốc tế (Visa, Master, JCB). Vé điện tử &amp; Mã QR lên đoàn sẽ được kích hoạt ngay sau khi thanh toán thành công.
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handlePayVNPayDirect(payModalBooking)}
-                  disabled={loadingPay}
-                  className="btn btn-primary"
-                  style={{
-                    width: '100%',
-                    padding: '13px',
-                    background: '#0F172A',
-                    borderColor: '#0F172A',
-                    fontWeight: 700,
-                    fontSize: '14px',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                  }}
-                >
-                  <Lock size={15} />
-                  {loadingPay ? 'Đang kết nối cổng VNPay...' : 'Thanh toán qua VNPAY →'}
-                </button>
-              </div>
-            )}
-
-            {/* TAB 2: TIỀN MẶT / THẺ TẠI QUẦY (GIỮ CHỖ) */}
-            {payTab === 'CASH_CARD' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{
-                  background: '#F8FAFC',
-                  border: '1px solid #CBD5E1',
-                  borderRadius: '10px',
-                  padding: '14px 16px',
-                  fontSize: '12.5px',
-                  color: '#334155',
-                }}>
-                  <div style={{ fontWeight: 700, fontSize: '13.5px', marginBottom: '6px', color: '#0F172A' }}>
-                    Hướng dẫn thanh toán trực tiếp tại quầy (Hiệu lực giữ chỗ 24 giờ)
-                  </div>
-                  <p style={{ margin: '0 0 10px', lineHeight: 1.55, color: '#475569' }}>
-                    Đơn đặt chỗ của Quý khách đang ở trạng thái <strong>Chờ thanh toán</strong> (chưa phát hành vé điện tử). Quý khách vui lòng cung cấp mã đơn <strong>{payModalBooking.MaDon}</strong> tại một trong các điểm giao dịch dưới đây để nộp tiền và nhận vé:
-                  </p>
-                  <div style={{ background: '#FFFFFF', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '12.5px', color: '#1E293B', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                    <div>• Quầy giao dịch Sân bay: <strong>Quầy VietTour — Sảnh Đi Ga Quốc Nội, Sân bay Quốc tế Tân Sơn Nhất (45 Trường Sơn, Q. Tân Bình, TP.HCM)</strong></div>
-                    <div>• Đại lý Phòng vé Trung tâm: <strong>190 Pasteur, Phường Võ Thị Sáu, Quận 3, TP.HCM</strong></div>
-                    <div>• Phương thức chấp nhận: <strong>Tiền mặt (VNĐ) hoặc Quẹt thẻ POS (Napas / Visa / Mastercard)</strong></div>
-                    <div>• Tổng đài hỗ trợ: <strong style={{ color: '#0F172A' }}>1900 1234 (07:00 – 22:00)</strong></div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setPayModalBooking(null)}
-                    className="btn btn-outline"
-                    style={{ flex: 1, fontWeight: 600, fontSize: '13px', padding: '11px', borderRadius: '8px' }}
-                  >
-                    Đóng
-                  </button>
-                  <button
-                    type="button"
-                    disabled={loadingPay}
-                    onClick={() => handleConfirmCashAtCounter(payModalBooking)}
-                    className="btn btn-primary"
-                    style={{
-                      flex: 2,
-                      background: '#0F172A',
-                      borderColor: '#0F172A',
-                      fontWeight: 700,
-                      fontSize: '13px',
-                      padding: '11px',
-                      borderRadius: '8px',
-                      cursor: loadingPay ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    {loadingPay ? 'Đang ghi nhận...' : 'Xác nhận thanh toán tiền mặt tại quầy'}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -903,7 +770,7 @@ export default function MyBookingsPage() {
                 <button
                   className="btn btn-outline"
                   style={{ width: '100%', padding: '11px', fontSize: '13.5px', fontWeight: 700, color: '#0F172A', borderColor: '#CBD5E1' }}
-                  onClick={() => downloadFile(`/export/ticket/pdf/${ticketModalBooking.MaDon}`, `ve-dien-tu-${ticketModalBooking.MaDon}.pdf`).catch((e) => alert(e instanceof Error ? e.message : 'Không thể tải vé PDF'))}
+                  onClick={() => downloadFile(`/export/ticket/pdf/${ticketModalBooking.MaDon}`, `ve-dien-tu-${ticketModalBooking.MaDon}.pdf`).catch((e) => void uiAlert(e instanceof Error ? e.message : 'Không thể tải vé PDF'))}
                 >
                   Tải Vé PDF (Boarding Pass)
                 </button>
@@ -995,7 +862,7 @@ export default function MyBookingsPage() {
                 <button
                   className="btn btn-outline btn-sm"
                   style={{ fontWeight: 600, color: 'var(--rose-600)', borderColor: 'var(--rose-300)' }}
-                  onClick={() => downloadFile(`/export/ticket/pdf/${selectedBooking.MaDon}`, `ve-dien-tu-${selectedBooking.MaDon}.pdf`).catch((e) => alert(e instanceof Error ? e.message : 'Không thể tải vé PDF'))}
+                  onClick={() => downloadFile(`/export/ticket/pdf/${selectedBooking.MaDon}`, `ve-dien-tu-${selectedBooking.MaDon}.pdf`).catch((e) => void uiAlert(e instanceof Error ? e.message : 'Không thể tải vé PDF'))}
                 >
                   Tải Vé PDF
                 </button>

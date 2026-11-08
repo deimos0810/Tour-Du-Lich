@@ -28,7 +28,7 @@ export default function CustomerFooter() {
       if (!res.ok) throw new Error(data.message || 'Đăng ký không thành công');
 
       setMessage({
-        text: data.message || `Đã gửi mã giảm giá VIETTOUR2026 đến ${email}!`,
+        text: data.message || `Đã gửi mã ưu đãi giảm giá đến hộp thư ${email}. Vui lòng kiểm tra email của bạn!`,
         type: 'success',
       });
       setEmail('');

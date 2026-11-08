@@ -4,7 +4,7 @@ import Link from 'next/link';
 import CustomerHeader from '@/components/customer/CustomerHeader';
 import CustomerFooter from '@/components/customer/CustomerFooter';
 import { api, downloadFile } from '@/lib/api';
-import { vnd } from '@/lib/ui';
+import { vnd, uiAlert } from '@/lib/ui';
 import { useAuth, UserSession } from '@/context/AuthContext';
 import { Printer, AlertTriangle, Check, Clock, UserCheck, Lock, Shield } from 'lucide-react';
 
@@ -178,7 +178,7 @@ export default function TicketDetailClient({
       await fetchTicket(true);
       setTimeout(() => setCheckinMsg(null), 4000);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Điểm danh thất bại');
+      uiAlert(err instanceof Error ? err.message : 'Điểm danh thất bại', { type: 'error', title: 'Không thể điểm danh' });
     } finally {
       setCheckingInId(null);
     }
@@ -225,7 +225,7 @@ export default function TicketDetailClient({
         window.location.href = res.paymentUrl;
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Không thể kết nối cổng VNPay');
+      uiAlert(err instanceof Error ? err.message : 'Không thể kết nối cổng VNPay', { type: 'error', title: 'Lỗi kết nối VNPay' });
     } finally {
       setPayingVnpay(false);
     }
@@ -364,7 +364,7 @@ export default function TicketDetailClient({
                   type="button"
                   onClick={() =>
                     downloadFile(`/export/ticket/pdf/${maDon}`, `ve-dien-tu-${maDon}.pdf`).catch((e) =>
-                      alert(e instanceof Error ? e.message : 'Không thể tải vé PDF'),
+                      uiAlert(e instanceof Error ? e.message : 'Không thể tải vé PDF', { type: 'error', title: 'Lỗi tải PDF' }),
                     )
                   }
                   style={{
@@ -793,13 +793,7 @@ export default function TicketDetailClient({
                   <div>
                     Phương thức:{' '}
                     <strong style={{ color: '#0F172A' }}>
-                      {isPaid
-                        ? ticket.PhuongThucTT === 'Tien mat'
-                          ? 'Tiền mặt tại quầy'
-                          : ticket.PhuongThucTT || 'VNPay / Chuyển khoản'
-                        : ticket.PhuongThucTT === 'Tien mat'
-                        ? 'Tiền mặt tại quầy (Chờ xác nhận thu)'
-                        : 'Chưa thanh toán'}
+                      {isPaid ? ticket.PhuongThucTT || 'Cổng thanh toán VNPay' : 'Chưa thanh toán'}
                     </strong>
                   </div>
                 </div>

@@ -329,55 +329,12 @@ class OrdersView extends GetView<OrdersController> {
 
               if (booking.canPay) ...[
                 SizedBox(height: 1.5.h),
-                Container(
-                  padding: EdgeInsets.all(3.5.w),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFCBD5E1)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Hướng dẫn thanh toán tại quầy (Giữ chỗ 24h):',
-                        style: TextStyle(
-                          fontSize: Responsive.font(10.5),
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF0F172A),
-                        ),
-                      ),
-                      SizedBox(height: 0.5.h),
-                      Text(
-                        '• Quầy giao dịch Sân bay: Quầy VietTour — Ga Quốc Nội, Sân bay Quốc tế Tân Sơn Nhất (45 Trường Sơn, Q. Tân Bình, TP.HCM)\n'
-                        '• Đại lý Phòng vé Trung tâm: 190 Pasteur, Phường Võ Thị Sáu, Quận 3, TP.HCM\n'
-                        '• Hỗ trợ: Tiền mặt (VNĐ) hoặc Quẹt thẻ POS • Hotline: 1900 1234',
-                        style: TextStyle(
-                          fontSize: Responsive.font(9.5),
-                          height: 1.45,
-                          color: const Color(0xFF334155),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 1.2.h),
                 AppButton(
                   label: 'Thanh toán trực tuyến qua Cổng VNPAY',
                   icon: Icons.credit_card_rounded,
                   onPressed: () {
                     Navigator.of(sheetContext).pop();
                     controller.payAgain(booking);
-                  },
-                ),
-                SizedBox(height: 1.h),
-                AppButton(
-                  label: 'Xác nhận thanh toán tiền mặt tại quầy',
-                  icon: Icons.storefront_outlined,
-                  outlined: true,
-                  onPressed: () {
-                    Navigator.of(sheetContext).pop();
-                    controller.requestCashPayment(booking);
                   },
                 ),
               ],

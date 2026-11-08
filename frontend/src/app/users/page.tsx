@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Icon from '@/components/Icon';
 import { api, useApi } from '@/lib/api';
-import { ApiNotice, EmptyRow, date } from '@/lib/ui';
+import { ApiNotice, EmptyRow, date, uiAlert, uiConfirm } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
 import { KeyRound, Lock, UserPlus, Award, X } from 'lucide-react';
 
@@ -66,11 +66,16 @@ export default function UsersPage() {
 
   const handleToggleStatus = async (u: UserAccount) => {
     if (u.TaiKhoanID === currentUser?.id) {
-      alert('Bạn không thể tự khóa tài khoản của chính mình!');
+      uiAlert('Bạn không thể tự khóa tài khoản của chính mình!', { type: 'warning', title: 'Thao tác không hợp lệ' });
       return;
     }
     const action = u.TrangThai === 1 ? 'khóa' : 'mở khóa';
-    if (!confirm(`Bạn có chắc muốn ${action} tài khoản "${u.Email}"?`)) return;
+    const ok = await uiConfirm(`Bạn có chắc muốn ${action} tài khoản "${u.Email}"?`, {
+      title: `Xác nhận ${action} tài khoản`,
+      confirmText: u.TrangThai === 1 ? 'Khóa tài khoản' : 'Mở khóa',
+      danger: u.TrangThai === 1,
+    });
+    if (!ok) return;
 
     try {
       await api(`/users/${u.TaiKhoanID}/toggle-status`, {
@@ -79,7 +84,7 @@ export default function UsersPage() {
       });
       void usersApi.reload();
     } catch (err: any) {
-      alert('Lỗi: ' + (err?.message || 'Không thể đổi trạng thái tài khoản'));
+      uiAlert('Lỗi: ' + (err?.message || 'Không thể đổi trạng thái tài khoản'), { type: 'error' });
     }
   };
 
@@ -91,7 +96,7 @@ export default function UsersPage() {
   const handleSaveRoles = async () => {
     if (!editingRoleUser) return;
     if (selectedRoles.length === 0) {
-      alert('Tài khoản phải có ít nhất 1 vai trò!');
+      uiAlert('Tài khoản phải có ít nhất 1 vai trò!', { type: 'warning' });
       return;
     }
 
@@ -100,11 +105,11 @@ export default function UsersPage() {
         method: 'PATCH',
         body: JSON.stringify({ roles: selectedRoles, actorId: currentUser?.id }),
       });
-      alert('Cập nhật vai trò thành công!');
+      uiAlert('Cập nhật vai trò thành công!', { type: 'success' });
       setEditingRoleUser(null);
       void usersApi.reload();
     } catch (err: any) {
-      alert('Lỗi: ' + (err?.message || 'Không thể cập nhật vai trò'));
+      uiAlert('Lỗi: ' + (err?.message || 'Không thể cập nhật vai trò'), { type: 'error' });
     }
   };
 
@@ -117,11 +122,11 @@ export default function UsersPage() {
         method: 'PATCH',
         body: JSON.stringify({ newPassword }),
       });
-      alert(`Đã đặt lại mật khẩu cho ${resetPwUser.Email} thành công!`);
+      uiAlert(`Đã đặt lại mật khẩu cho ${resetPwUser.Email} thành công!`, { type: 'success' });
       setResetPwUser(null);
       setNewPassword('');
     } catch (err: any) {
-      alert('Lỗi: ' + (err?.message || 'Không thể đổi mật khẩu'));
+      uiAlert('Lỗi: ' + (err?.message || 'Không thể đổi mật khẩu'), { type: 'error' });
     }
   };
 
@@ -133,12 +138,12 @@ export default function UsersPage() {
         method: 'POST',
         body: JSON.stringify(staffForm),
       });
-      alert('Thêm tài khoản nhân viên thành công!');
+      uiAlert('Thêm tài khoản nhân viên thành công!', { type: 'success' });
       setShowAddModal(false);
       setStaffForm(INITIAL_STAFF_FORM);
       void usersApi.reload();
     } catch (err: any) {
-      alert('Lỗi: ' + (err?.message || 'Không thể tạo tài khoản'));
+      uiAlert('Lỗi: ' + (err?.message || 'Không thể tạo tài khoản'), { type: 'error' });
     } finally {
       setSubmitting(false);
     }

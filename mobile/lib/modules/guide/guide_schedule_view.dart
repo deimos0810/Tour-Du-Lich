@@ -669,10 +669,12 @@ class GuideScheduleView extends StatelessWidget {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                onChanged: (_) {
-                                  controller.togglePax(item, pax);
-                                  Navigator.pop(context);
-                                },
+                                onChanged: pax.isCheckedIn
+                                    ? null
+                                    : (_) {
+                                        controller.togglePax(item, pax);
+                                        Navigator.pop(context);
+                                      },
                               ),
                               SizedBox(width: 1.w),
                               Expanded(

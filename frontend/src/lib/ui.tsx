@@ -1,4 +1,5 @@
-import React from 'react';
+'use client';
+import React, { useEffect, useState } from 'react';
 
 export const vnd = (v: number | string | null | undefined) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(Number(v ?? 0));
@@ -19,6 +20,7 @@ const STATUS: Record<string, [string, Tone]> = {
   'Dong ban': ['Tạm dừng', 'warning'],
   'Huy': ['Đã hủy', 'danger'],
   'Đã hủy': ['Đã hủy', 'danger'],
+  'Da xoa': ['Đã lưu trữ', 'muted'],
 
   // LichKhoiHanh.TrangThai
   'Cho khoi hanh': ['Chờ khởi hành', 'success'],
@@ -58,6 +60,7 @@ const STATUS: Record<string, [string, Tone]> = {
   'Chờ xác nhận': ['Chờ xác nhận', 'warning'],
   'Chap nhan': ['Đã chấp nhận', 'success'],
   'Đã chấp nhận': ['Đã chấp nhận', 'success'],
+  'Da xac nhan ': ['Đã xác nhận', 'success'],
   'Tu choi': ['Đã từ chối', 'danger'],
   'Đã từ chối': ['Đã từ chối', 'danger'],
 
@@ -102,4 +105,445 @@ export function ApiNotice({ error }: { error: string | null }) {
 
 export function EmptyRow({ cols, loading }: { cols: number; loading: boolean }) {
   return <tr><td className="empty" colSpan={cols}>{loading ? 'Đang tải dữ liệu...' : 'Chưa có dữ liệu'}</td></tr>;
+}
+
+/* =============================================================================
+ * HỆ THỐNG UI MODAL THÔNG BÁO / XÁC NHẬN / NHẬP LIỆU TOÀN CỤC (THAY NATIVE DIALOG)
+ * ===========================================================================*/
+type DialogKind = 'alert' | 'confirm' | 'prompt';
+type DialogTone = 'success' | 'warning' | 'danger' | 'info';
+
+type DialogRequest = {
+  id: number;
+  kind: DialogKind;
+  message: string;
+  title?: string;
+  tone: DialogTone;
+  defaultValue?: string;
+  placeholder?: string;
+  confirmText?: string;
+  resolve: (val: any) => void;
+};
+
+export type UiAlertOptions =
+  | string
+  | {
+      title?: string;
+      type?: 'success' | 'warning' | 'danger' | 'error' | 'info';
+      confirmText?: string;
+    };
+
+export type UiConfirmOptions =
+  | string
+  | {
+      title?: string;
+      confirmText?: string;
+      danger?: boolean;
+      type?: 'success' | 'warning' | 'danger' | 'error' | 'info';
+    };
+
+export type UiPromptOptions =
+  | string
+  | {
+      title?: string;
+      defaultValue?: string;
+      placeholder?: string;
+      confirmText?: string;
+    };
+
+let enqueueDialog: ((req: Omit<DialogRequest, 'id'>) => void) | null = null;
+
+function detectTone(msg: string, kind: DialogKind): DialogTone {
+  const lower = msg.toLowerCase();
+  if (kind === 'confirm') {
+    if (lower.includes('xóa') || lower.includes('hủy') || lower.includes('từ chối') || lower.includes('khóa')) {
+      return 'danger';
+    }
+    return 'info';
+  }
+  if (
+    lower.includes('lỗi') ||
+    lower.includes('không thể') ||
+    lower.includes('thất bại') ||
+    lower.includes('không hợp lệ') ||
+    lower.includes('vượt quá') ||
+    lower.includes('kín chỗ') ||
+    lower.includes('đã qua ngày')
+  ) {
+    return 'danger';
+  }
+  if (
+    lower.includes('vui lòng') ||
+    lower.includes('ràng buộc') ||
+    lower.includes('⚠️') ||
+    lower.includes('ít nhất') ||
+    lower.includes('tối đa') ||
+    lower.includes('chưa')
+  ) {
+    return 'warning';
+  }
+  if (
+    lower.includes('thành công') ||
+    lower.includes('đã gửi') ||
+    lower.includes('đã xóa') ||
+    lower.includes('đã cập nhật') ||
+    lower.includes('đã gỡ') ||
+    lower.includes('đã đặt lại') ||
+    lower.includes('đã kích hoạt') ||
+    lower.includes('đã xuất') ||
+    lower.includes('xin chào')
+  ) {
+    return 'success';
+  }
+  return 'info';
+}
+
+function defaultTitle(tone: DialogTone, kind: DialogKind): string {
+  if (kind === 'confirm') return tone === 'danger' ? 'Xác nhận thao tác quan trọng' : 'Xác nhận thực hiện';
+  if (kind === 'prompt') return 'Nhập thông tin xác nhận';
+  if (tone === 'success') return 'Thao tác thành công';
+  if (tone === 'danger') return 'Thông báo lỗi';
+  if (tone === 'warning') return 'Lưu ý kiểm tra thông tin';
+  return 'Thông báo hệ thống';
+}
+
+export function uiAlert(message: string, opts?: UiAlertOptions): Promise<void> {
+  const cleanMsg = String(message ?? '').replace(/^⚠️\s*/, '').trim();
+  const titleOpt = typeof opts === 'string' ? opts : opts?.title;
+  const rawType = typeof opts === 'object' && opts ? opts.type : undefined;
+  const confirmText = typeof opts === 'object' && opts ? opts.confirmText : undefined;
+  const mappedTone: DialogTone | undefined =
+    rawType === 'error' ? 'danger' : rawType;
+  const tone = mappedTone || detectTone(cleanMsg, 'alert');
+  if (!enqueueDialog) {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    enqueueDialog!({
+      kind: 'alert',
+      message: cleanMsg,
+      title: titleOpt || defaultTitle(tone, 'alert'),
+      tone,
+      confirmText,
+      resolve: () => resolve(),
+    });
+  });
+}
+
+export function uiConfirm(message: string, opts?: UiConfirmOptions): Promise<boolean> {
+  const cleanMsg = String(message ?? '').trim();
+  const titleOpt = typeof opts === 'string' ? opts : opts?.title;
+  const confirmText = typeof opts === 'object' && opts ? opts.confirmText : undefined;
+  const isDanger = typeof opts === 'object' && opts ? opts.danger : undefined;
+  const rawType = typeof opts === 'object' && opts ? opts.type : undefined;
+  const mappedTone: DialogTone | undefined =
+    isDanger ? 'danger' : rawType === 'error' ? 'danger' : rawType;
+  const tone = mappedTone || detectTone(cleanMsg, 'confirm');
+  if (!enqueueDialog) {
+    return Promise.resolve(true);
+  }
+  return new Promise<boolean>((resolve) => {
+    enqueueDialog!({
+      kind: 'confirm',
+      message: cleanMsg,
+      title: titleOpt || defaultTitle(tone, 'confirm'),
+      tone,
+      confirmText,
+      resolve: (ok: boolean) => resolve(Boolean(ok)),
+    });
+  });
+}
+
+export function uiPrompt(message: string, opts?: UiPromptOptions, maybeTitle?: string): Promise<string | null> {
+  const cleanMsg = String(message ?? '').trim();
+  const defaultValue = typeof opts === 'string' ? opts : opts?.defaultValue || '';
+  const titleOpt = typeof opts === 'string' ? maybeTitle : opts?.title;
+  const placeholder = typeof opts === 'object' && opts ? opts.placeholder : undefined;
+  const confirmText = typeof opts === 'object' && opts ? opts.confirmText : undefined;
+  if (!enqueueDialog) {
+    return Promise.resolve(defaultValue);
+  }
+  return new Promise<string | null>((resolve) => {
+    enqueueDialog!({
+      kind: 'prompt',
+      message: cleanMsg,
+      defaultValue,
+      placeholder,
+      confirmText,
+      title: titleOpt || defaultTitle('info', 'prompt'),
+      tone: 'info',
+      resolve: (val: string | null) => resolve(val),
+    });
+  });
+}
+
+export function UiFeedbackRoot() {
+  const [queue, setQueue] = useState<DialogRequest[]>([]);
+  const [promptVal, setPromptVal] = useState('');
+
+  useEffect(() => {
+    enqueueDialog = (req) => {
+      setQueue((prev) => [...prev, { ...req, id: Date.now() + Math.random() }]);
+    };
+    if (typeof window !== 'undefined') {
+      window.alert = (msg?: any) => {
+        void uiAlert(String(msg ?? ''));
+      };
+    }
+    return () => {
+      enqueueDialog = null;
+    };
+  }, []);
+
+  const current = queue[0] || null;
+
+  useEffect(() => {
+    if (current?.kind === 'prompt') {
+      setPromptVal(current.defaultValue || '');
+    }
+  }, [current]);
+
+  if (!current) return null;
+
+  const closeWith = (val: any) => {
+    const fn = current.resolve;
+    setQueue((prev) => prev.slice(1));
+    fn(val);
+  };
+
+  const palette = {
+    success: {
+      accent: '#059669',
+      bgSoft: '#ECFDF5',
+      borderSoft: '#A7F3D0',
+      btnBg: '#059669',
+      icon: '✓',
+    },
+    warning: {
+      accent: '#D97706',
+      bgSoft: '#FFFBEB',
+      borderSoft: '#FDE68A',
+      btnBg: '#D97706',
+      icon: '!',
+    },
+    danger: {
+      accent: '#DC2626',
+      bgSoft: '#FEF2F2',
+      borderSoft: '#FECACA',
+      btnBg: '#DC2626',
+      icon: '✕',
+    },
+    info: {
+      accent: '#0F172A',
+      bgSoft: '#F1F5F9',
+      borderSoft: '#CBD5E1',
+      btnBg: '#0F172A',
+      icon: 'i',
+    },
+  }[current.tone];
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 99999,
+        backgroundColor: 'rgba(15, 23, 42, 0.55)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+      }}
+      onClick={() => {
+        if (current.kind === 'alert') closeWith(undefined);
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: '440px',
+          background: '#FFFFFF',
+          borderRadius: '14px',
+          border: '1px solid #E2E8F0',
+          boxShadow: '0 24px 48px -12px rgba(15, 23, 42, 0.28)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: '20px 22px 16px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '14px',
+          }}
+        >
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              background: palette.bgSoft,
+              border: `1px solid ${palette.borderSoft}`,
+              color: palette.accent,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 800,
+              fontSize: '18px',
+              flexShrink: 0,
+            }}
+          >
+            {palette.icon}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: '15.5px',
+                fontWeight: 700,
+                color: '#0F172A',
+                marginBottom: '6px',
+                lineHeight: 1.35,
+              }}
+            >
+              {current.title}
+            </div>
+            <div
+              style={{
+                fontSize: '13.5px',
+                color: '#334155',
+                lineHeight: 1.6,
+                whiteSpace: 'pre-line',
+                wordBreak: 'break-word',
+              }}
+            >
+              {current.message}
+            </div>
+            {current.kind === 'prompt' && (
+              <input
+                type="text"
+                className="input"
+                autoFocus
+                value={promptVal}
+                onChange={(e) => setPromptVal(e.target.value)}
+                placeholder={current.placeholder || 'Nhập nội dung tại đây...'}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') closeWith(promptVal.trim() || null);
+                  if (e.key === 'Escape') closeWith(null);
+                }}
+                style={{
+                  marginTop: '12px',
+                  width: '100%',
+                  fontSize: '13.5px',
+                }}
+              />
+            )}
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: '12px 22px',
+            background: '#F8FAFC',
+            borderTop: '1px solid #E2E8F0',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: '8px',
+          }}
+        >
+          {current.kind === 'alert' ? (
+            <button
+              type="button"
+              autoFocus
+              onClick={() => closeWith(undefined)}
+              style={{
+                padding: '8px 20px',
+                borderRadius: '8px',
+                border: 'none',
+                background: palette.btnBg,
+                color: '#FFFFFF',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              {current.confirmText || 'Đã hiểu'}
+            </button>
+          ) : current.kind === 'confirm' ? (
+            <>
+              <button
+                type="button"
+                onClick={() => closeWith(false)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #CBD5E1',
+                  background: '#FFFFFF',
+                  color: '#334155',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => closeWith(true)}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: palette.btnBg,
+                  color: '#FFFFFF',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                {current.confirmText || 'Xác nhận'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => closeWith(null)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #CBD5E1',
+                  background: '#FFFFFF',
+                  color: '#334155',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => closeWith(promptVal.trim() || null)}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#0F172A',
+                  color: '#FFFFFF',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                {current.confirmText || 'Xác nhận'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }

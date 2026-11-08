@@ -15,7 +15,13 @@ export class DeparturesService {
 
   findAll(trangThai?: string) {
     return this.prisma.lichKhoiHanh.findMany({
-      where: trangThai ? { TrangThai: trangThai } : undefined,
+      where: {
+        ...(trangThai ? { TrangThai: trangThai } : {}),
+        OR: [
+          { Tour: { TrangThaiDuyet: { not: 'Da xoa' } } },
+          { SoChoDaDat: { gt: 0 } },
+        ],
+      },
       include: {
         Tour: { select: { TourID: true, MaTour: true, TenTour: true } },
         DieuPhoiTour: { include: { HuongDanVien: { include: { NhanVien: { select: { HoTen: true } } } } } },
@@ -146,8 +152,8 @@ export class BookingsService {
     if (Number.isNaN(amount) || amount <= 0) {
       throw new BadRequestException('Số tiền thu phải lớn hơn 0');
     }
-    const validMethods = ['VNPay', 'Chuyen khoan', 'Tien mat', 'MoMo'];
-    const hinhThuc = validMethods.includes(body.HinhThucTT) ? body.HinhThucTT : 'Tien mat';
+    const validMethods = ['VNPay', 'Chuyen khoan', 'MoMo'];
+    const hinhThuc = validMethods.includes(body.HinhThucTT) ? body.HinhThucTT : 'VNPay';
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT donhangid FROM dondattour WHERE donhangid = ${id} FOR UPDATE`;
@@ -166,7 +172,7 @@ export class BookingsService {
           HinhThucTT: hinhThuc,
           NhanVienID: body.NhanVienID,
           TrangThai: 'Thanh cong',
-          GhiChu: body.GhiChu?.trim() || `Xác nhận thu ${hinhThuc === 'Tien mat' ? 'tiền mặt tại quầy' : 'chuyển khoản'} lúc ${timeLabel}`,
+          GhiChu: body.GhiChu?.trim() || `Xác nhận thanh toán ${hinhThuc} lúc ${timeLabel}`,
         },
       });
       return tx.donDatTour.update({
@@ -186,29 +192,11 @@ export class BookingsService {
     return updated;
   }
 
-  /** Khách hàng xác nhận chọn hình thức Thanh toán tiền mặt tại quầy (chờ Admin xác nhận thu tiền) */
-  async requestCashPayment(id: number, body?: { ghiChu?: string }) {
+  /** Đã ngừng hỗ trợ phương thức Thanh toán tiền mặt tại quầy */
+  async requestCashPayment(id: number, _body?: { ghiChu?: string }) {
     const don = await this.prisma.donDatTour.findUnique({ where: { DonHangID: id } });
     if (!don) throw new NotFoundException('Không tìm thấy đơn đặt tour');
-    if (don.TrangThaiDon === 'Da huy') throw new BadRequestException('Đơn đặt tour đã bị hủy');
-    if (don.TrangThaiDon === 'Da thanh toan') return don;
-
-    const now = new Date();
-    const timeStr = `${now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ${now.toLocaleDateString('vi-VN')}`;
-    const noteLine = `[ĐĂNG KÝ TIỀN MẶT TẠI QUẦY] ${timeStr} - ${body?.ghiChu || 'Khách xác nhận nộp tiền mặt tại quầy giao dịch VietTour (Chờ Admin thu tiền)'}`;
-    const cleanedOld = (don.GhiChu || '')
-      .split('\n')
-      .filter((line) => !line.includes('[ĐĂNG KÝ TIỀN MẶT TẠI QUẦY]'))
-      .join('\n')
-      .trim();
-
-    return this.prisma.donDatTour.update({
-      where: { DonHangID: id },
-      data: {
-        PhuongThucTT: 'Tien mat',
-        GhiChu: cleanedOld ? `${cleanedOld}\n${noteLine}` : noteLine,
-      },
-    });
+    throw new BadRequestException('Phương thức thanh toán tiền mặt tại quầy đã ngừng hỗ trợ. Vui lòng thanh toán trực tuyến qua cổng VNPay.');
   }
 
   /** Xác nhận thanh toán VietQR chuyển khoản ngân hàng 24/7 tức thì (kèm gửi email vé điện tử QR) */

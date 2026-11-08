@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import { api, useApi, getImageUrl } from '@/lib/api';
-import { ApiNotice, Status, date, vnd } from '@/lib/ui';
+import { ApiNotice, Status, date, vnd, uiAlert, uiConfirm } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
 import {
   CalendarDays,
@@ -283,7 +283,12 @@ export default function GuideWorkspacePage() {
   // Xác nhận nhận tour hoặc từ chối
   const handleRespond = async (assignmentId: number, trangThai: 'Chap nhan' | 'Tu choi') => {
     const actionLabel = trangThai === 'Chap nhan' ? 'xác nhận nhận tour' : 'từ chối tour';
-    if (!confirm(`Bạn có chắc chắn muốn ${actionLabel} này không?`)) return;
+    const ok = await uiConfirm(`Bạn có chắc chắn muốn ${actionLabel} này không?`, {
+      title: trangThai === 'Chap nhan' ? 'Xác nhận nhận đoàn' : 'Xác nhận từ chối đoàn',
+      confirmText: trangThai === 'Chap nhan' ? 'Xác nhận nhận tour' : 'Từ chối tour',
+      danger: trangThai === 'Tu choi',
+    });
+    if (!ok) return;
 
     try {
       await api(`/assignments/${assignmentId}/respond`, {
@@ -293,16 +298,23 @@ export default function GuideWorkspacePage() {
       showToast(`Đã ${actionLabel} thành công!`);
       void scheduleApi.reload();
     } catch (err: any) {
-      alert(err.message || 'Lỗi cập nhật trạng thái phân công');
+      uiAlert(err.message || 'Lỗi cập nhật trạng thái phân công', { type: 'error', title: 'Lỗi phân công' });
     }
   };
 
-  // Toggle điểm danh trực tiếp từng hành khách
-  const handleToggleCheckin = async (paxId: number) => {
+  // Điểm danh trực tiếp từng hành khách (đã điểm danh thì khóa không cho chỉnh lại chưa điểm danh)
+  const handleToggleCheckin = async (paxId: number, currentStatus?: number) => {
+    if (currentStatus === 1) {
+      uiAlert('Hành khách này đã được điểm danh lên đoàn, không được phép chỉnh lại thành Chưa điểm danh!', {
+        type: 'warning',
+        title: 'Đã khóa điểm danh',
+      });
+      return;
+    }
     try {
       await api(`/guide/checkin-toggle/${paxId}`, { method: 'PATCH' });
       playBeep();
-      showToast('Cập nhật trạng thái điểm danh hành khách thành công!');
+      showToast('Đã xác nhận điểm danh hành khách lên đoàn thành công!');
       void scheduleApi.reload();
 
       // Cập nhật state modal nếu đang mở
@@ -312,7 +324,7 @@ export default function GuideWorkspacePage() {
           const updatedDons = prev.LichKhoiHanh.DonDatTour.map((d) => ({
             ...d,
             ChiTietHanhKhach: d.ChiTietHanhKhach.map((p) =>
-              p.ChiTietID === paxId ? { ...p, TrangThaiDiemDanh: p.TrangThaiDiemDanh === 1 ? 0 : 1 } : p
+              p.ChiTietID === paxId ? { ...p, TrangThaiDiemDanh: 1 } : p
             ),
           }));
           const allPax = updatedDons.flatMap((d) => d.ChiTietHanhKhach);
@@ -324,7 +336,7 @@ export default function GuideWorkspacePage() {
         });
       }
     } catch (err: any) {
-      alert(err.message || 'Lỗi cập nhật điểm danh');
+      uiAlert(err.message || 'Lỗi cập nhật điểm danh', { type: 'error', title: 'Không thể điểm danh' });
     }
   };
 
@@ -355,25 +367,35 @@ export default function GuideWorkspacePage() {
         }, 300);
       }
     } catch (err: any) {
-      alert(err.message || 'Mã vé/QR không hợp lệ hoặc không thuộc chuyến này');
+      uiAlert(err.message || 'Mã vé/QR không hợp lệ hoặc không thuộc chuyến này', { type: 'error', title: 'Lỗi quét vé QR' });
     } finally {
       setProcessingCheckin(false);
     }
   };
 
-  // Điểm danh tất cả hoặc Hủy tất cả
+  // Điểm danh tất cả hành khách trong đoàn (khóa chiều hủy điểm danh)
   const handleBatchCheckin = async (status: number) => {
     if (!inspectingAssignment) return;
-    const actionName = status === 1 ? 'điểm danh tất cả hành khách' : 'hủy điểm danh tất cả';
-    if (!confirm(`Bạn có chắc chắn muốn ${actionName} trong đoàn này không?`)) return;
+    if (status === 0) {
+      uiAlert('Hành khách đã điểm danh không được phép chỉnh lại thành Chưa điểm danh!', {
+        type: 'warning',
+        title: 'Đã khóa điểm danh',
+      });
+      return;
+    }
+    const ok = await uiConfirm('Bạn có chắc chắn muốn điểm danh tất cả hành khách trong đoàn này không? (Sau khi điểm danh sẽ không thể hoàn tác về chưa điểm danh)', {
+      title: 'Xác nhận điểm danh toàn đoàn',
+      confirmText: 'Điểm danh tất cả',
+    });
+    if (!ok) return;
 
     try {
       const res: any = await api(`/guide/batch-checkin/${inspectingAssignment.LichKhoiHanh.LichID}`, {
         method: 'PATCH',
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status: 1 }),
       });
       playBeep();
-      showToast(res.message || 'Cập nhật thành công!');
+      showToast(res.message || 'Điểm danh toàn đoàn thành công!');
       void scheduleApi.reload();
 
       setTimeout(async () => {
@@ -382,7 +404,7 @@ export default function GuideWorkspacePage() {
         if (matched) setInspectingAssignment(matched);
       }, 300);
     } catch (err: any) {
-      alert(err.message || 'Lỗi thực hiện thao tác hàng loạt');
+      uiAlert(err.message || 'Lỗi thực hiện thao tác hàng loạt', { type: 'error', title: 'Lỗi điểm danh hàng loạt' });
     }
   };
 
@@ -1112,14 +1134,6 @@ export default function GuideWorkspacePage() {
                     </button>
                     <button
                       className="btn btn-outline btn-sm"
-                      onClick={() => handleBatchCheckin(0)}
-                      title="Hủy điểm danh tất cả"
-                      style={{ fontSize: '11.5px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                    >
-                      <RefreshCw size={12} /> Bỏ điểm danh
-                    </button>
-                    <button
-                      className="btn btn-outline btn-sm"
                       onClick={() => window.print()}
                       title="In danh sách đón đoàn"
                       style={{ fontSize: '11.5px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
@@ -1239,21 +1253,29 @@ export default function GuideWorkspacePage() {
                               <td style={{ textAlign: 'right' }}>
                                 <button
                                   className={`btn btn-sm ${isCheckedIn ? 'btn-outline' : 'btn-primary'}`}
-                                  onClick={() => handleToggleCheckin(pax.ChiTietID)}
+                                  onClick={() => handleToggleCheckin(pax.ChiTietID, pax.TrangThaiDiemDanh)}
+                                  disabled={isCheckedIn}
+                                  title={
+                                    isCheckedIn
+                                      ? 'Đã điểm danh lên đoàn (Không thể chỉnh lại chưa điểm danh)'
+                                      : 'Bấm để điểm danh hành khách này'
+                                  }
                                   style={{
                                     fontSize: '12px',
                                     padding: '4px 10px',
                                     borderColor: isCheckedIn ? '#10B981' : undefined,
                                     color: isCheckedIn ? '#059669' : undefined,
-                                    fontWeight: 500,
+                                    background: isCheckedIn ? '#ECFDF5' : undefined,
+                                    fontWeight: 600,
+                                    cursor: isCheckedIn ? 'not-allowed' : 'pointer',
                                   }}
                                 >
                                   {isCheckedIn ? (
                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                      <CheckCircle2 size={13} color="#059669" /> Đã có mặt
+                                      <CheckCircle2 size={13} color="#059669" /> Đã điểm danh
                                     </span>
                                   ) : (
-                                    'Chưa điểm danh'
+                                    'Điểm danh ngay'
                                   )}
                                 </button>
                                 {isCheckedIn && meta.diemDanhLuc && (
@@ -1521,16 +1543,34 @@ export default function GuideWorkspacePage() {
               </div>
 
               <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-                <button
-                  className="btn btn-primary"
-                  style={{ flex: 1, fontSize: '12.5px', fontWeight: 600 }}
-                  onClick={() => {
-                    handleQrCheckin(viewingTicketPax.MaQRVe || undefined);
-                    setViewingTicketPax(null);
-                  }}
-                >
-                  Xác Nhận Soát Vé Này
-                </button>
+                {viewingTicketPax.TrangThaiDiemDanh === 1 ? (
+                  <button
+                    className="btn btn-outline"
+                    disabled
+                    style={{
+                      flex: 1,
+                      fontSize: '12.5px',
+                      fontWeight: 700,
+                      borderColor: '#10B981',
+                      color: '#059669',
+                      background: '#ECFDF5',
+                      cursor: 'not-allowed',
+                    }}
+                  >
+                    ✓ Đã điểm danh (Đã khóa)
+                  </button>
+                ) : (
+                  <button
+                    className="btn btn-primary"
+                    style={{ flex: 1, fontSize: '12.5px', fontWeight: 600 }}
+                    onClick={() => {
+                      handleQrCheckin(viewingTicketPax.MaQRVe || undefined);
+                      setViewingTicketPax(null);
+                    }}
+                  >
+                    Xác Nhận Soát Vé Này
+                  </button>
+                )}
                 <button
                   className="btn btn-outline"
                   onClick={() => setViewingTicketPax(null)}

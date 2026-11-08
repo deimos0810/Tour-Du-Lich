@@ -76,6 +76,13 @@ class GuideScheduleController extends GetxController {
   }
 
   Future<void> togglePax(GuideScheduleItemModel schedule, GuidePassengerModel pax) async {
+    if (pax.isCheckedIn) {
+      Get.snackbar(
+        'Đã khóa điểm danh',
+        'Hành khách ${pax.fullName} đã được điểm danh lên đoàn, không được phép chỉnh lại thành Chưa điểm danh.',
+      );
+      return;
+    }
     try {
       await _guideService.togglePaxCheckin(pax.id);
       await loadSchedule();

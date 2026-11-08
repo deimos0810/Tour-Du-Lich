@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useRef, useState } from 'react';
 import { api, getImageUrl, uploadTourImage, useApi } from '@/lib/api';
-import { ApiNotice, EmptyRow, Status, vnd } from '@/lib/ui';
+import { ApiNotice, EmptyRow, Status, vnd, uiAlert, uiConfirm } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
 import {
   Plus,
@@ -261,7 +261,7 @@ export default function ToursPage() {
   const handleUploadDayImage = async (dayIndex: number, file: File) => {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
-      alert('Kích thước ảnh ngày tối đa 10MB!');
+      uiAlert('Kích thước ảnh ngày tối đa 10MB!', { type: 'warning', title: 'File quá lớn' });
       return;
     }
     setUploadingDayIndex(dayIndex);
@@ -274,7 +274,7 @@ export default function ToursPage() {
         return next;
       });
     } catch (err: any) {
-      alert('Lỗi tải ảnh ngày: ' + (err?.message || 'Thất bại'));
+      uiAlert('Lỗi tải ảnh ngày: ' + (err?.message || 'Thất bại'), { type: 'error', title: 'Lỗi tải ảnh' });
     } finally {
       setUploadingDayIndex(null);
     }
@@ -308,12 +308,17 @@ export default function ToursPage() {
     });
   };
 
-  const handleRemoveDay = (index: number) => {
+  const handleRemoveDay = async (index: number) => {
     if (itineraryDays.length <= 1) {
-      alert('Lịch trình phải có ít nhất 1 ngày hành trình.');
+      uiAlert('Lịch trình phải có ít nhất 1 ngày hành trình.', { type: 'warning' });
       return;
     }
-    if (!confirm(`Bạn có chắc chắn muốn xóa Ngày ${index + 1}?`)) return;
+    const ok = await uiConfirm(`Bạn có chắc chắn muốn xóa Ngày ${index + 1}?`, {
+      title: 'Xác nhận xóa ngày hành trình',
+      confirmText: 'Xóa ngày này',
+      danger: true,
+    });
+    if (!ok) return;
     setItineraryDays((prev) => {
       const filtered = prev.filter((_, i) => i !== index);
       const reindexed = filtered.map((d, i) => ({ ...d, day: i + 1 }));
@@ -399,7 +404,10 @@ export default function ToursPage() {
 
     if (Object.keys(errors).length > 0) {
       const errList = Object.values(errors).join('\n• ');
-      alert(`⚠️ Ràng buộc dữ liệu chưa đạt chuẩn quy trình nghiệp vụ:\n\n• ${errList}`);
+      uiAlert(`Ràng buộc dữ liệu chưa đạt chuẩn quy trình nghiệp vụ:\n\n• ${errList}`, {
+        type: 'warning',
+        title: 'Kiểm tra thông tin Tour',
+      });
       return;
     }
 
@@ -433,32 +441,40 @@ export default function ToursPage() {
           method: 'PATCH',
           body: JSON.stringify(payload),
         });
-        alert('Cập nhật thông tin tour thành công!');
+        uiAlert('Cập nhật thông tin tour thành công!', { type: 'success', title: 'Cập nhật thành công' });
       } else {
         await api('/tours', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
-        alert('Tạo tour du lịch mới thành công!');
+        uiAlert('Tạo tour du lịch mới thành công!', { type: 'success', title: 'Tạo tour thành công' });
       }
 
       setShowModal(false);
       void tours.reload();
     } catch (err: any) {
-      alert('Lỗi: ' + (err?.message || 'Không thể lưu thông tin tour'));
+      uiAlert('Lỗi: ' + (err?.message || 'Không thể lưu thông tin tour'), { type: 'error', title: 'Không thể lưu Tour' });
     } finally {
       setSubmitting(false);
     }
   };
 
   const remove = async (t: Tour) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa tour "${t.TenTour}" (Mã: ${t.MaTour})?`)) return;
+    const ok = await uiConfirm(`Bạn có chắc chắn muốn xóa tour "${t.TenTour}" (Mã: ${t.MaTour})?`, {
+      title: 'Xác nhận xóa Tour du lịch',
+      confirmText: 'Xóa Tour',
+      danger: true,
+    });
+    if (!ok) return;
     try {
-      await api(`/tours/${t.TourID}`, { method: 'DELETE' });
-      alert('Đã xóa tour thành công!');
+      const res = await api<{ ok?: boolean; mode?: string; message?: string }>(`/tours/${t.TourID}`, { method: 'DELETE' });
+      uiAlert(res?.message || 'Đã xóa tour thành công!', {
+        type: 'success',
+        title: res?.mode === 'ARCHIVE_PROTECTED' ? 'Đã xóa & bảo toàn dữ liệu đơn cũ' : 'Đã xóa Tour thành công',
+      });
       void tours.reload();
     } catch (err: any) {
-      alert(err?.message || 'Không thể xóa: tour đã có lịch khởi hành hoặc đơn hàng liên kết.');
+      uiAlert(err?.message || 'Không thể xóa tour này.', { type: 'error', title: 'Không thể xóa Tour' });
     }
   };
 

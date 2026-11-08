@@ -1,0 +1,21 @@
+name: Keep Render Backend & Frontend Awake
+
+on:
+  schedule:
+    # Chạy tự động mỗi 10 phút để giữ Render không bị sleep sau 15 phút không hoạt động
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping VietTour Backend Healthcheck
+        run: |
+          echo "Pinging Backend..."
+          curl -fsSL --retry 3 --retry-delay 5 --max-time 60 https://viettour-backend.onrender.com/api/health || true
+      - name: Ping VietTour Frontend Healthcheck
+        run: |
+          echo "Pinging Frontend..."
+          curl -fsSL --retry 3 --retry-delay 5 --max-time 60 https://viettour-frontend.onrender.com/api/health || true
+

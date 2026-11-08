@@ -243,19 +243,10 @@ function PolicyContent() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <div style={{ background: '#F4F4F5', borderRadius: '6px', padding: '16px', border: '1px solid #E4E4E7' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                      <strong style={{ fontSize: '14px', color: '#09090B' }}>Phương thức 1: Cổng thanh toán trực tuyến VNPay</strong>
+                      <strong style={{ fontSize: '14px', color: '#09090B' }}>Cổng thanh toán trực tuyến VNPay</strong>
                     </div>
                     <p style={{ fontSize: '13px', color: '#52525B', lineHeight: 1.6, margin: 0 }}>
-                      Hệ thống tự động kết nối trực tiếp đến Cổng thanh toán VNPay. Quý khách có thể sử dụng thẻ ATM nội địa của các ngân hàng Việt Nam hoặc thẻ quốc tế (Visa, MasterCard, JCB) với xác thực OTP bảo mật cao. Sau khi giao dịch hoàn tất, hệ thống tự động xuất Vé điện tử QR Code ngay lập tức.
-                    </p>
-                  </div>
-
-                  <div style={{ background: '#F4F4F5', borderRadius: '6px', padding: '16px', border: '1px solid #E4E4E7' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                      <strong style={{ fontSize: '14px', color: '#09090B' }}>Phương thức 2: Tiền mặt / Thẻ ngân hàng tại quầy (Giữ chỗ 24h)</strong>
-                    </div>
-                    <p style={{ fontSize: '13px', color: '#52525B', lineHeight: 1.6, margin: 0 }}>
-                      Quý khách chọn hình thức này sẽ được bảo lưu chỗ ngồi trong vòng 24 giờ. Quý khách vui lòng đến trực tiếp Văn phòng VietTour tại Số 40, Đường số 13, KĐT Vạn Phúc, TP. Hồ Chí Minh để thanh toán bằng tiền mặt hoặc quẹt thẻ POS với nhân viên tư vấn trước khi hết hạn giữ chỗ.
+                      Hệ thống tự động kết nối trực tiếp đến Cổng thanh toán VNPay. Quý khách có thể sử dụng thẻ ATM nội địa của các ngân hàng Việt Nam hoặc thẻ quốc tế (Visa, MasterCard, JCB) với xác thực OTP bảo mật cao. Sau khi giao dịch hoàn tất, hệ thống tự động xuất Vé điện tử QR Code ngay lập tức và gửi về email của Quý khách.
                     </p>
                   </div>
                 </div>

@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { api, downloadFile, useApi } from '@/lib/api';
-import { ApiNotice, Status, date, vnd } from '@/lib/ui';
+import { ApiNotice, Status, date, vnd, uiAlert, uiConfirm } from '@/lib/ui';
 import {
   FileSpreadsheet,
   FileText,
@@ -173,7 +173,11 @@ export default function SettlementsPage() {
   };
 
   const approve = async (s: Settlement) => {
-    if (!confirm(`Xác nhận phê duyệt báo cáo quyết toán tài chính chuyến ${s.LichKhoiHanh.MaLich}?`)) return;
+    const ok = await uiConfirm(`Xác nhận phê duyệt báo cáo quyết toán tài chính chuyến ${s.LichKhoiHanh.MaLich}?`, {
+      title: 'Phê duyệt báo cáo quyết toán',
+      confirmText: 'Phê duyệt',
+    });
+    if (!ok) return;
     try {
       await api(`/settlements/${s.QuyetToanID}/approve`, {
         method: 'PATCH',
@@ -182,7 +186,7 @@ export default function SettlementsPage() {
       showToast(`Đã phê duyệt quyết toán chuyến ${s.LichKhoiHanh.MaLich} thành công!`);
       void reload();
     } catch (err: any) {
-      alert(err.message || 'Lỗi phê duyệt quyết toán');
+      uiAlert(err.message || 'Lỗi phê duyệt quyết toán', { type: 'error', title: 'Lỗi phê duyệt' });
     }
   };
 
@@ -196,7 +200,7 @@ export default function SettlementsPage() {
       );
       showToast(`Tải xuống file ${kind === 'pdf' ? 'PDF' : 'Excel'} quyết toán ${s.LichKhoiHanh.MaLich} thành công!`);
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Không thể xuất file');
+      uiAlert(e instanceof Error ? e.message : 'Không thể xuất file', { type: 'error', title: 'Lỗi xuất file' });
     } finally {
       setDownloadingId(null);
     }
@@ -208,7 +212,7 @@ export default function SettlementsPage() {
       await downloadFile('/export/reports/excel', 'bao-cao-tai-chinh-tong-hop.xlsx');
       showToast('Đã xuất thành công Báo cáo tài chính tổng hợp toàn bộ các chuyến đi!');
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Không thể xuất file');
+      uiAlert(e instanceof Error ? e.message : 'Không thể xuất file', { type: 'error', title: 'Lỗi xuất file' });
     } finally {
       setDownloadingId(null);
     }
@@ -222,7 +226,7 @@ export default function SettlementsPage() {
       const res = await api<SettlementPreview>(`/settlements/preview/${lichId}`);
       setPreviewData(res);
     } catch (err: any) {
-      alert(err.message || 'Không thể tính toán số liệu quyết toán');
+      uiAlert(err.message || 'Không thể tính toán số liệu quyết toán', { type: 'error', title: 'Lỗi tính toán' });
     } finally {
       setLoadingPreview(false);
     }
@@ -242,7 +246,7 @@ export default function SettlementsPage() {
       setPreviewData(null);
       void reload();
     } catch (err: any) {
-      alert(err.message || 'Lỗi lập bảng quyết toán');
+      uiAlert(err.message || 'Lỗi lập bảng quyết toán', { type: 'error', title: 'Lỗi lập quyết toán' });
     } finally {
       setCreatingSettlement(false);
     }

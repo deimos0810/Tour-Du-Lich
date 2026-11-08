@@ -29,7 +29,7 @@ export const MAIL_FLOWS = [
   { ma: 'PROMO_ENDING', ten: 'Khuyến mãi sắp hết hạn (≤ 48 giờ)', suKien: 'Hệ thống quét định kỳ 15 phút', nguoiNhan: 'Tất cả người đang nhận tin', loai: 'Marketing', cachGui: 'Tự động (scheduler)', chongTrung: 'Mỗi (khuyến mãi, email) 1 lần' },
   { ma: 'VOUCHER_NEW', ten: 'Phát hành mã giảm giá', suKien: 'Admin bấm "Gửi voucher" ở trang Mã giảm giá', nguoiNhan: 'Tất cả người đang nhận tin', loai: 'Marketing', cachGui: 'Thủ công', chongTrung: 'Mỗi (voucher, email) 1 lần' },
   { ma: 'BOOKING_CREATED', ten: 'Xác nhận đặt tour', suKien: 'Khách đặt tour thành công (trạng thái Chờ thanh toán)', nguoiNhan: 'Khách đặt tour', loai: 'Giao dịch', cachGui: 'Tự động', chongTrung: 'Mỗi đơn 1 lần' },
-  { ma: 'TICKET', ten: 'Xác nhận thanh toán + vé điện tử QR', suKien: 'Thanh toán thành công (VNPay / ZaloPay / chuyển khoản / tiền mặt)', nguoiNhan: 'Khách đặt tour', loai: 'Giao dịch', cachGui: 'Tự động', chongTrung: 'Theo từng lần thanh toán đủ' },
+  { ma: 'TICKET', ten: 'Xác nhận thanh toán + vé điện tử QR', suKien: 'Thanh toán thành công (VNPay / ZaloPay / chuyển khoản)', nguoiNhan: 'Khách đặt tour', loai: 'Giao dịch', cachGui: 'Tự động', chongTrung: 'Theo từng lần thanh toán đủ' },
   { ma: 'BOOKING_CANCELLED', ten: 'Xác nhận hủy tour + hoàn tiền', suKien: 'Khách hoặc nhân viên hủy đơn', nguoiNhan: 'Khách đặt tour', loai: 'Giao dịch', cachGui: 'Tự động', chongTrung: 'Mỗi đơn 1 lần' },
   { ma: 'REMIND_PAYMENT', ten: 'Nhắc thanh toán giữ chỗ', suKien: 'Đơn Chờ thanh toán quá 2 giờ, tour chưa khởi hành', nguoiNhan: 'Khách đặt tour', loai: 'Giao dịch', cachGui: 'Tự động (scheduler)', chongTrung: 'Mỗi đơn 1 lần' },
   { ma: 'REMIND_DEPARTURE', ten: 'Nhắc lịch khởi hành (D-3, D-1)', suKien: 'Còn ≤ 72 giờ và ≤ 24 giờ trước giờ khởi hành', nguoiNhan: 'Khách đã thanh toán/đặt cọc', loai: 'Giao dịch', cachGui: 'Tự động (scheduler)', chongTrung: 'Mỗi (đơn, mốc) 1 lần' },
@@ -219,15 +219,17 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       dedupe: false,
     });
 
+    if (!sent) {
+      throw new BadRequestException(
+        `Không thể gửi email đến ${email}. Vui lòng cấu hình biến môi trường RESEND_API_KEY (hoặc MAIL_WEBHOOK_URL) trên Render vì Render Free Tier chặn cổng SMTP 587.`,
+      );
+    }
+
     return {
       success: true,
       alreadySubscribed: alreadyActive,
-      message: sent
-        ? `Đã gửi mã ưu đãi${voucherOk ? ` ${welcomeCode}` : ''} và thông tin khuyến mãi vào hộp thư ${email}! Mỗi khi có khuyến mãi tour mới, hệ thống sẽ tự động báo về email này.`
-        : `Đã lưu đăng ký nhận tin cho ${email}!${voucherOk ? ` Mã ưu đãi của bạn là ${welcomeCode}.` : ''}`,
+      message: `Đăng ký nhận bản tin thành công! Mã giảm giá ưu đãi và thông tin khuyến mãi đã được gửi về hộp thư ${email}. Vui lòng kiểm tra hộp thư đến (hoặc mục Quảng cáo/Spam).`,
       email,
-      voucherCode: voucherOk ? welcomeCode : null,
-      discountInfo,
     };
   }
 

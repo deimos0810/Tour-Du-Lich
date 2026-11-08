@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { api, useApi } from '@/lib/api';
-import { ApiNotice, EmptyRow, date, vnd } from '@/lib/ui';
+import { ApiNotice, EmptyRow, date, vnd, uiAlert, uiConfirm } from '@/lib/ui';
 import {
   Tag,
   Ticket,
@@ -180,8 +180,8 @@ export default function PromotionsPage() {
 
   const handleSavePromo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!promoForm.TenChuongTrinh.trim()) return alert('Vui lòng nhập tên chương trình');
-    if (promoForm.tourIds.length === 0) return alert('Vui lòng chọn ít nhất 1 tour áp dụng');
+    if (!promoForm.TenChuongTrinh.trim()) return uiAlert('Vui lòng nhập tên chương trình', { type: 'warning' });
+    if (promoForm.tourIds.length === 0) return uiAlert('Vui lòng chọn ít nhất 1 tour áp dụng', { type: 'warning' });
     setSubmitting(true);
     try {
       const payload = {
@@ -203,15 +203,16 @@ export default function PromotionsPage() {
       void promoApi.reload();
       void logsApi.reload();
       void overviewApi.reload();
-      alert(
+      uiAlert(
         editingPromo
           ? 'Cập nhật khuyến mãi tour thành công!'
           : promoForm.guiThongBao
           ? 'Tạo khuyến mãi tour thành công & đã tự động phát email thông báo tới toàn bộ khách hàng đăng ký nhận tin!'
-          : 'Tạo khuyến mãi tour thành công!'
+          : 'Tạo khuyến mãi tour thành công!',
+        { type: 'success', title: 'Lưu khuyến mãi thành công' }
       );
     } catch (err: any) {
-      alert(err?.message || 'Lỗi lưu khuyến mãi tour');
+      uiAlert(err?.message || 'Lỗi lưu khuyến mãi tour', { type: 'error', title: 'Không thể lưu khuyến mãi' });
     } finally {
       setSubmitting(false);
     }
@@ -222,34 +223,46 @@ export default function PromotionsPage() {
       await api(`/promotions/${p.CTKMID}/toggle`, { method: 'PATCH' });
       void promoApi.reload();
     } catch (err: any) {
-      alert(err?.message || 'Không thể đổi trạng thái');
+      uiAlert(err?.message || 'Không thể đổi trạng thái', { type: 'error' });
     }
   };
 
   const handleDeletePromo = async (p: CTKM) => {
-    if (!confirm(`Bạn có chắc muốn xóa khuyến mãi "${p.TenChuongTrinh}"?`)) return;
+    const ok = await uiConfirm(`Bạn có chắc muốn xóa khuyến mãi "${p.TenChuongTrinh}"?`, {
+      title: 'Xác nhận xóa chương trình khuyến mãi',
+      confirmText: 'Xóa khuyến mãi',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api(`/promotions/${p.CTKMID}`, { method: 'DELETE' });
       void promoApi.reload();
-      alert('Đã xóa chương trình khuyến mãi');
+      uiAlert('Đã xóa chương trình khuyến mãi', { type: 'success' });
     } catch (err: any) {
-      alert(err?.message || 'Không thể xóa');
+      uiAlert(err?.message || 'Không thể xóa', { type: 'error' });
     }
   };
 
   const handleBroadcastPromo = async (p: CTKM) => {
-    if (!confirm(`Gửi email thông báo khuyến mãi "${p.TenChuongTrinh}" (-${p.PhanTramGiam}%) đến tất cả khách hàng đăng ký nhận tin?`)) return;
+    const ok = await uiConfirm(`Gửi email thông báo khuyến mãi "${p.TenChuongTrinh}" (-${p.PhanTramGiam}%) đến tất cả khách hàng đăng ký nhận tin?`, {
+      title: 'Xác nhận phát bản tin Email',
+      confirmText: 'Gửi email ngay',
+    });
+    if (!ok) return;
     setBroadcastingId(p.CTKMID);
     try {
       const res = await api<{ tongNguoiNhan: number; thanhCong: number; thatBai: number; daGuiTruocDo: number }>(
         `/notifications/broadcast/promotion/${p.CTKMID}`,
         { method: 'POST' }
       );
-      alert(`Đã gửi thành công ${res.thanhCong}/${res.tongNguoiNhan} email! (${res.daGuiTruocDo} email đã nhận trước đó).`);
+      uiAlert(`Đã gửi thành công ${res.thanhCong}/${res.tongNguoiNhan} email! (${res.daGuiTruocDo} email đã nhận trước đó).`, {
+        type: 'success',
+        title: 'Hoàn tất gửi bản tin',
+      });
       void logsApi.reload();
       void overviewApi.reload();
     } catch (err: any) {
-      alert(err?.message || 'Lỗi gửi bản tin');
+      uiAlert(err?.message || 'Lỗi gửi bản tin', { type: 'error' });
     } finally {
       setBroadcastingId(null);
     }
@@ -295,7 +308,7 @@ export default function PromotionsPage() {
   const handleSaveVoucher = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!voucherForm.MaVoucher.trim() || !voucherForm.TenChuongTrinh.trim()) {
-      return alert('Vui lòng nhập Mã voucher và Tên chương trình');
+      return uiAlert('Vui lòng nhập Mã voucher và Tên chương trình', { type: 'warning' });
     }
     setSubmitting(true);
     try {
@@ -320,15 +333,16 @@ export default function PromotionsPage() {
       void voucherApi.reload();
       void logsApi.reload();
       void overviewApi.reload();
-      alert(
+      uiAlert(
         editingVoucher
           ? 'Cập nhật mã voucher thành công!'
           : voucherForm.guiThongBao
           ? 'Tạo mã voucher thành công & đã tự động gửi email thông báo tới toàn bộ khách hàng đăng ký nhận tin!'
-          : 'Tạo mã voucher thành công!'
+          : 'Tạo mã voucher thành công!',
+        { type: 'success', title: 'Lưu Voucher thành công' }
       );
     } catch (err: any) {
-      alert(err?.message || 'Lỗi lưu mã voucher');
+      uiAlert(err?.message || 'Lỗi lưu mã voucher', { type: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -339,34 +353,46 @@ export default function PromotionsPage() {
       await api(`/vouchers/${v.VoucherID}/toggle`, { method: 'PATCH' });
       void voucherApi.reload();
     } catch (err: any) {
-      alert(err?.message || 'Không thể đổi trạng thái');
+      uiAlert(err?.message || 'Không thể đổi trạng thái', { type: 'error' });
     }
   };
 
   const handleDeleteVoucher = async (v: Voucher) => {
-    if (!confirm(`Bạn có chắc muốn xóa mã voucher "${v.MaVoucher}"?`)) return;
+    const ok = await uiConfirm(`Bạn có chắc muốn xóa mã voucher "${v.MaVoucher}"?`, {
+      title: 'Xác nhận xóa mã Voucher',
+      confirmText: 'Xóa Voucher',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api(`/vouchers/${v.VoucherID}`, { method: 'DELETE' });
       void voucherApi.reload();
-      alert('Đã xóa mã voucher');
+      uiAlert('Đã xóa mã voucher', { type: 'success' });
     } catch (err: any) {
-      alert(err?.message || 'Không thể xóa');
+      uiAlert(err?.message || 'Không thể xóa', { type: 'error' });
     }
   };
 
   const handleBroadcastVoucher = async (v: Voucher) => {
-    if (!confirm(`Gửi mã voucher "${v.MaVoucher}" (-${v.PhanTramGiam}%) đến tất cả khách hàng đăng ký nhận tin?`)) return;
+    const ok = await uiConfirm(`Gửi mã voucher "${v.MaVoucher}" (-${v.PhanTramGiam}%) đến tất cả khách hàng đăng ký nhận tin?`, {
+      title: 'Xác nhận gửi mã Voucher qua Email',
+      confirmText: 'Gửi ngay',
+    });
+    if (!ok) return;
     setBroadcastingId(v.VoucherID);
     try {
       const res = await api<{ tongNguoiNhan: number; thanhCong: number; thatBai: number; daGuiTruocDo: number }>(
         `/notifications/broadcast/voucher/${v.VoucherID}`,
         { method: 'POST' }
       );
-      alert(`Đã gửi thành công ${res.thanhCong}/${res.tongNguoiNhan} email! (${res.daGuiTruocDo} email đã nhận trước đó).`);
+      uiAlert(`Đã gửi thành công ${res.thanhCong}/${res.tongNguoiNhan} email! (${res.daGuiTruocDo} email đã nhận trước đó).`, {
+        type: 'success',
+        title: 'Hoàn tất gửi Voucher',
+      });
       void logsApi.reload();
       void overviewApi.reload();
     } catch (err: any) {
-      alert(err?.message || 'Lỗi gửi voucher');
+      uiAlert(err?.message || 'Lỗi gửi voucher', { type: 'error' });
     } finally {
       setBroadcastingId(null);
     }
@@ -378,7 +404,7 @@ export default function PromotionsPage() {
       void subsApi.reload();
       void overviewApi.reload();
     } catch (err: any) {
-      alert(err?.message || 'Lỗi cập nhật người đăng ký');
+      uiAlert(err?.message || 'Lỗi cập nhật người đăng ký', { type: 'error' });
     }
   };
 

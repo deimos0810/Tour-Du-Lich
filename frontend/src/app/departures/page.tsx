@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Icon from '@/components/Icon';
 import { api, useApi } from '@/lib/api';
-import { ApiNotice, EmptyRow, Status, date, vnd } from '@/lib/ui';
+import { ApiNotice, EmptyRow, Status, date, vnd, uiAlert, uiConfirm } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
 import { User, AlertTriangle, Calendar, UserCheck, X } from 'lucide-react';
 
@@ -79,7 +79,7 @@ export default function DeparturesPage() {
   const handleCreateDeparture = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createForm.TourID || !createForm.NgayKhoiHanh || !createForm.NgayKetThuc) {
-      alert('Vui lòng chọn Tour và thời gian khởi hành!');
+      uiAlert('Vui lòng chọn Tour và thời gian khởi hành!', { type: 'warning', title: 'Thiếu thông tin' });
       return;
     }
 
@@ -96,11 +96,11 @@ export default function DeparturesPage() {
           MaLich: createForm.MaLich.trim() || undefined,
         }),
       });
-      alert('Tạo lịch khởi hành mới thành công!');
+      uiAlert('Tạo lịch khởi hành mới thành công!', { type: 'success', title: 'Hoàn tất' });
       setShowCreateModal(false);
       void reload();
     } catch (err: any) {
-      alert('Lỗi: ' + (err?.message || 'Không thể tạo lịch khởi hành'));
+      uiAlert('Lỗi: ' + (err?.message || 'Không thể tạo lịch khởi hành'), { type: 'error', title: 'Lỗi tạo lịch' });
     } finally {
       setSubmitting(false);
     }
@@ -117,7 +117,7 @@ export default function DeparturesPage() {
       const firstAvailable = res.find((g) => g.available);
       if (firstAvailable) setSelectedHdvId(firstAvailable.HDVID);
     } catch (err: any) {
-      alert('Không thể tải danh sách HDV: ' + (err?.message || 'Lỗi mạng'));
+      uiAlert('Không thể tải danh sách HDV: ' + (err?.message || 'Lỗi mạng'), { type: 'error', title: 'Lỗi tải HDV' });
     } finally {
       setLoadingGuides(false);
     }
@@ -125,7 +125,7 @@ export default function DeparturesPage() {
 
   const handleAssignGuide = async () => {
     if (!assigningLich || !selectedHdvId) {
-      alert('Vui lòng chọn một Hướng dẫn viên!');
+      uiAlert('Vui lòng chọn một Hướng dẫn viên!', { type: 'warning', title: 'Chưa chọn HDV' });
       return;
     }
 
@@ -139,38 +139,47 @@ export default function DeparturesPage() {
           GhiChu: assignNote.trim() || undefined,
         }),
       });
-      alert('Phân công Hướng dẫn viên thành công!');
+      uiAlert('Phân công Hướng dẫn viên thành công!', { type: 'success', title: 'Hoàn tất phân công' });
       setAssigningLich(null);
       void reload();
     } catch (err: any) {
-      alert('Lỗi phân công: ' + (err?.message || 'Thao tác thất bại'));
+      uiAlert('Lỗi phân công: ' + (err?.message || 'Thao tác thất bại'), { type: 'error', title: 'Lỗi phân công' });
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleUpdateStatus = async (d: Departure, newStatus: string) => {
-    if (!confirm(`Chuyển trạng thái chuyến "${d.MaLich}" sang "${newStatus}"?`)) return;
+    const ok = await uiConfirm(`Chuyển trạng thái chuyến "${d.MaLich}" sang "${newStatus}"?`, {
+      title: 'Xác nhận chuyển trạng thái chuyến',
+      confirmText: 'Chuyển trạng thái',
+    });
+    if (!ok) return;
     try {
       await api(`/departures/${d.LichID}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ TrangThai: newStatus }),
       });
-      alert('Đã cập nhật trạng thái chuyến đi!');
+      uiAlert('Đã cập nhật trạng thái chuyến đi!', { type: 'success', title: 'Đã cập nhật' });
       void reload();
     } catch (err: any) {
-      alert('Lỗi: ' + (err?.message || 'Không thể cập nhật'));
+      uiAlert('Lỗi: ' + (err?.message || 'Không thể cập nhật'), { type: 'error', title: 'Lỗi cập nhật' });
     }
   };
 
   const handleUnassign = async (dieuPhoiId: number) => {
-    if (!confirm('Hủy phân công HDV này khỏi chuyến đi?')) return;
+    const ok = await uiConfirm('Hủy phân công HDV này khỏi chuyến đi?', {
+      title: 'Xác nhận gỡ phân công HDV',
+      confirmText: 'Gỡ phân công',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api(`/assignments/${dieuPhoiId}`, { method: 'DELETE' });
-      alert('Đã gỡ phân công HDV!');
+      uiAlert('Đã gỡ phân công HDV!', { type: 'success', title: 'Đã gỡ phân công' });
       void reload();
     } catch (err: any) {
-      alert('Lỗi: ' + (err?.message || 'Thao tác thất bại'));
+      uiAlert('Lỗi: ' + (err?.message || 'Thao tác thất bại'), { type: 'error', title: 'Lỗi gỡ phân công' });
     }
   };
 
