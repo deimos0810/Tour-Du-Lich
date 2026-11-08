@@ -147,11 +147,16 @@ export default function BookingsPage() {
     setCancelError('');
   };
 
+  const [cancelShakeKey, setCancelShakeKey] = useState(0);
+
   const handleConfirmCancel = async () => {
     if (!cancellingBooking) return;
     const reason = cancelReason.trim();
     if (!reason || reason.length < 5) {
       setCancelError('Vui lòng nhập lý do hủy cụ thể (tối thiểu 5 ký tự) để gửi thông báo cho khách hàng.');
+      setCancelShakeKey((prev) => prev + 1);
+      const el = document.getElementById('admin-cancel-reason-input');
+      if (el) el.focus();
       return;
     }
 
@@ -876,18 +881,28 @@ export default function BookingsPage() {
               </div>
 
               <div style={{ marginBottom: '16px' }}>
+                <style>{`
+                  @keyframes adminCancelFlashShake {
+                    0%, 100% { transform: translateX(0); box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.22); }
+                    15%, 45%, 75% { transform: translateX(-6px); box-shadow: 0 0 0 6px rgba(225, 29, 72, 0.38); background-color: #fee2e2; }
+                    30%, 60%, 90% { transform: translateX(6px); box-shadow: 0 0 0 6px rgba(225, 29, 72, 0.38); background-color: #fef2f2; }
+                  }
+                `}</style>
                 <label
+                  htmlFor="admin-cancel-reason-input"
                   style={{
                     display: 'block',
                     fontSize: '13px',
                     fontWeight: 700,
-                    color: '#0f172a',
+                    color: cancelError ? '#e11d48' : '#0f172a',
                     marginBottom: '6px',
                   }}
                 >
-                  Lý do hủy đơn (Bắt buộc) <span style={{ color: '#e11d48' }}>*</span>
+                  Lý do hủy đơn (Bắt buộc) <span style={{ color: '#e11d48', fontWeight: 800 }}>*</span>
                 </label>
                 <textarea
+                  id="admin-cancel-reason-input"
+                  key={cancelShakeKey}
                   className="input"
                   rows={4}
                   style={{
@@ -896,7 +911,11 @@ export default function BookingsPage() {
                     fontSize: '13.5px',
                     padding: '10px 12px',
                     borderRadius: '8px',
-                    borderColor: cancelError ? '#fca5a5' : '#cbd5e1',
+                    borderColor: cancelError ? '#e11d48' : '#cbd5e1',
+                    borderWidth: cancelError ? '2px' : '1px',
+                    backgroundColor: cancelError ? '#fef2f2' : undefined,
+                    boxShadow: cancelError ? '0 0 0 3px rgba(225, 29, 72, 0.2)' : undefined,
+                    animation: cancelError ? 'adminCancelFlashShake 0.55s ease-in-out' : undefined,
                     resize: 'vertical',
                   }}
                   placeholder="Nhập lý do chi tiết để giải thích cho khách hàng (ví dụ: Khách gọi điện yêu cầu hủy, Quá hạn đóng tiền cọc...)"
@@ -907,8 +926,8 @@ export default function BookingsPage() {
                   }}
                 />
                 {cancelError && (
-                  <p style={{ margin: 0, marginTop: '6px', fontSize: '12px', color: '#e11d48' }}>
-                    {cancelError}
+                  <p style={{ margin: 0, marginTop: '6px', fontSize: '12px', fontWeight: 600, color: '#e11d48' }}>
+                    * {cancelError}
                   </p>
                 )}
               </div>

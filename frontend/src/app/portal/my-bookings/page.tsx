@@ -66,6 +66,8 @@ export default function MyBookingsPage() {
   const [cancelModalBooking, setCancelModalBooking] = useState<Booking | null>(null);
   const [cancelPreview, setCancelPreview] = useState<any | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [cancelReasonError, setCancelReasonError] = useState(false);
+  const [cancelShakeKey, setCancelShakeKey] = useState(0);
   const [loadingCancel, setLoadingCancel] = useState(false);
 
   // Modal Đánh giá tour
@@ -217,6 +219,7 @@ export default function MyBookingsPage() {
   const handleOpenCancelModal = async (booking: Booking) => {
     setCancelModalBooking(booking);
     setCancelReason('');
+    setCancelReasonError(false);
     setCancelPreview(null);
     try {
       const cid = user?.customerId || (booking as any).KhachHangID;
@@ -233,9 +236,13 @@ export default function MyBookingsPage() {
   const handleConfirmCancel = async () => {
     if (!cancelModalBooking) return;
     if (!cancelReason.trim()) {
-      void uiAlert('Vui lòng nhập lý do hủy tour!');
+      setCancelReasonError(true);
+      setCancelShakeKey((prev) => prev + 1);
+      const el = document.getElementById('customer-cancel-reason-input');
+      if (el) el.focus();
       return;
     }
+    setCancelReasonError(false);
     setLoadingCancel(true);
     try {
       const cid = user?.customerId || (cancelModalBooking as any).KhachHangID;
@@ -959,27 +966,66 @@ export default function MyBookingsPage() {
             )}
 
             <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: 'var(--zinc-900)', marginBottom: '6px' }}>
-                Lý do hủy tour (Bắt buộc):
+              <style>{`
+                @keyframes cancelInputFlashShake {
+                  0%, 100% { transform: translateX(0); box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.22); }
+                  15%, 45%, 75% { transform: translateX(-6px); box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.38); background-color: #FEE2E2; }
+                  30%, 60%, 90% { transform: translateX(6px); box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.38); background-color: #FEF2F2; }
+                }
+              `}</style>
+              <label
+                htmlFor="customer-cancel-reason-input"
+                style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: cancelReasonError ? '#DC2626' : 'var(--zinc-900)', marginBottom: '6px' }}
+              >
+                Lý do hủy tour (Bắt buộc) <span style={{ color: '#DC2626', fontWeight: 800 }}>*</span>:
               </label>
               <textarea
+                id="customer-cancel-reason-input"
+                key={cancelShakeKey}
                 className="input"
                 rows={3}
                 placeholder="Nhập lý do bạn muốn hủy đơn (VD: Việc bận đột xuất, thay đổi kế hoạch cá nhân...)"
                 value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                style={{ width: '100%', fontSize: '13px', padding: '10px' }}
+                onChange={(e) => {
+                  setCancelReason(e.target.value);
+                  if (cancelReasonError && e.target.value.trim()) {
+                    setCancelReasonError(false);
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  fontSize: '13px',
+                  padding: '10px',
+                  borderColor: cancelReasonError ? '#DC2626' : undefined,
+                  borderWidth: cancelReasonError ? '2px' : undefined,
+                  backgroundColor: cancelReasonError ? '#FEF2F2' : undefined,
+                  boxShadow: cancelReasonError ? '0 0 0 3px rgba(220, 38, 38, 0.2)' : undefined,
+                  animation: cancelReasonError ? 'cancelInputFlashShake 0.55s ease-in-out' : undefined,
+                  transition: 'border-color 0.2s, background-color 0.2s, box-shadow 0.2s',
+                }}
               />
+              {cancelReasonError && (
+                <div style={{ marginTop: '6px', fontSize: '12px', fontWeight: 600, color: '#DC2626', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span>* Vui lòng nhập lý do hủy tour trước khi xác nhận hủy đơn!</span>
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button className="btn btn-outline btn-sm" onClick={() => setCancelModalBooking(null)} disabled={loadingCancel}>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => {
+                  setCancelReasonError(false);
+                  setCancelModalBooking(null);
+                }}
+                disabled={loadingCancel}
+              >
                 Đóng
               </button>
               <button
                 className="btn btn-primary btn-sm"
                 onClick={handleConfirmCancel}
-                disabled={loadingCancel || !cancelReason.trim()}
+                disabled={loadingCancel}
                 style={{ background: 'var(--rose-600)', borderColor: 'var(--rose-600)', fontWeight: 600 }}
               >
                 {loadingCancel ? 'Đang xử lý...' : 'Xác Nhận Hủy Đơn'}

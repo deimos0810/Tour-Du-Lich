@@ -280,6 +280,8 @@ export function uiPrompt(message: string, opts?: UiPromptOptions, maybeTitle?: s
 export function UiFeedbackRoot() {
   const [queue, setQueue] = useState<DialogRequest[]>([]);
   const [promptVal, setPromptVal] = useState('');
+  const [promptError, setPromptError] = useState(false);
+  const [promptShakeKey, setPromptShakeKey] = useState(0);
 
   useEffect(() => {
     enqueueDialog = (req) => {
@@ -300,6 +302,7 @@ export function UiFeedbackRoot() {
   useEffect(() => {
     if (current?.kind === 'prompt') {
       setPromptVal(current.defaultValue || '');
+      setPromptError(false);
     }
   }, [current]);
 
@@ -419,25 +422,58 @@ export function UiFeedbackRoot() {
               }}
             >
               {current.message}
+              {current.kind === 'prompt' && (
+                <span style={{ color: '#DC2626', fontWeight: 800, marginLeft: '4px' }}>*</span>
+              )}
             </div>
             {current.kind === 'prompt' && (
-              <input
-                type="text"
-                className="input"
-                autoFocus
-                value={promptVal}
-                onChange={(e) => setPromptVal(e.target.value)}
-                placeholder={current.placeholder || 'Nhập nội dung tại đây...'}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') closeWith(promptVal.trim() || null);
-                  if (e.key === 'Escape') closeWith(null);
-                }}
-                style={{
-                  marginTop: '12px',
-                  width: '100%',
-                  fontSize: '13.5px',
-                }}
-              />
+              <div>
+                <style>{`
+                  @keyframes uiPromptFlashShake {
+                    0%, 100% { transform: translateX(0); box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.22); }
+                    15%, 45%, 75% { transform: translateX(-6px); box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.38); background-color: #FEE2E2; }
+                    30%, 60%, 90% { transform: translateX(6px); box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.38); background-color: #FEF2F2; }
+                  }
+                `}</style>
+                <input
+                  key={promptShakeKey}
+                  type="text"
+                  className="input"
+                  autoFocus
+                  value={promptVal}
+                  onChange={(e) => {
+                    setPromptVal(e.target.value);
+                    if (promptError && e.target.value.trim()) setPromptError(false);
+                  }}
+                  placeholder={current.placeholder || 'Nhập nội dung bắt buộc tại đây...'}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (!promptVal.trim()) {
+                        setPromptError(true);
+                        setPromptShakeKey((k) => k + 1);
+                      } else {
+                        closeWith(promptVal.trim());
+                      }
+                    }
+                    if (e.key === 'Escape') closeWith(null);
+                  }}
+                  style={{
+                    marginTop: '12px',
+                    width: '100%',
+                    fontSize: '13.5px',
+                    borderColor: promptError ? '#DC2626' : undefined,
+                    borderWidth: promptError ? '2px' : undefined,
+                    backgroundColor: promptError ? '#FEF2F2' : undefined,
+                    boxShadow: promptError ? '0 0 0 3px rgba(220, 38, 38, 0.2)' : undefined,
+                    animation: promptError ? 'uiPromptFlashShake 0.55s ease-in-out' : undefined,
+                  }}
+                />
+                {promptError && (
+                  <div style={{ marginTop: '6px', fontSize: '12px', fontWeight: 600, color: '#DC2626' }}>
+                    * Vui lòng nhập nội dung bắt buộc trước khi xác nhận!
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -526,7 +562,14 @@ export function UiFeedbackRoot() {
               </button>
               <button
                 type="button"
-                onClick={() => closeWith(promptVal.trim() || null)}
+                onClick={() => {
+                  if (!promptVal.trim()) {
+                    setPromptError(true);
+                    setPromptShakeKey((k) => k + 1);
+                    return;
+                  }
+                  closeWith(promptVal.trim());
+                }}
                 style={{
                   padding: '8px 18px',
                   borderRadius: '8px',
