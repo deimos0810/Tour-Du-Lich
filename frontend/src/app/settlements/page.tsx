@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, downloadFile, useApi } from '@/lib/api';
 import { ApiNotice, Status, date, vnd, uiAlert, uiConfirm } from '@/lib/ui';
 import {
@@ -162,6 +162,31 @@ export default function SettlementsPage() {
   const [previewData, setPreviewData] = useState<SettlementPreview | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [creatingSettlement, setCreatingSettlement] = useState(false);
+
+  const closeCreateModal = () => {
+    if (creatingSettlement) return;
+    setIsCreateModalOpen(false);
+    setSelectedLichId(null);
+    setPreviewData(null);
+  };
+
+  // Khóa cuộn trang nền + đóng modal bằng phím Esc khi đang mở modal
+  useEffect(() => {
+    if (!isCreateModalOpen && !inspectingSettlement) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (inspectingSettlement) setInspectingSettlement(null);
+      else closeCreateModal();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCreateModalOpen, inspectingSettlement, creatingSettlement]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -716,25 +741,32 @@ export default function SettlementsPage() {
             justifyContent: 'center',
             padding: '16px',
           }}
+          onClick={closeCreateModal}
         >
           <div
             style={{
               background: '#FFF',
               borderRadius: '10px',
-              maxWidth: '720px',
+              maxWidth: '960px',
               width: '100%',
+              maxHeight: 'calc(100vh - 32px)',
+              display: 'flex',
+              flexDirection: 'column',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
               overflow: 'hidden',
             }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
+                gap: '12px',
                 padding: '16px 20px',
                 borderBottom: '1px solid var(--border)',
                 background: 'var(--zinc-50)',
+                flexShrink: 0,
               }}
             >
               <div>
@@ -747,18 +779,15 @@ export default function SettlementsPage() {
               </div>
               <button
                 className="btn btn-outline btn-sm"
-                onClick={() => {
-                  setIsCreateModalOpen(false);
-                  setSelectedLichId(null);
-                  setPreviewData(null);
-                }}
-                style={{ padding: '4px 8px' }}
+                onClick={closeCreateModal}
+                title="Đóng (Esc)"
+                style={{ padding: '4px 8px', flexShrink: 0 }}
               >
                 <X size={15} />
               </button>
             </div>
 
-            <div style={{ padding: '20px' }}>
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
                   Chọn đợt khởi hành cần lập quyết toán:
@@ -801,7 +830,7 @@ export default function SettlementsPage() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '14px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '14px' }}>
                     <div style={{ background: '#FFF', padding: '12px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
                       <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <DollarSign size={13} color="var(--emerald-600)" /> TỔNG DOANH THU
@@ -842,7 +871,7 @@ export default function SettlementsPage() {
                       </span>
                     </div>
                     {previewData.chiTietChiPhi && previewData.chiTietChiPhi.length > 0 ? (
-                      <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #E2E8F0', borderRadius: '6px' }}>
+                      <div style={{ maxHeight: '260px', overflow: 'auto', border: '1px solid #E2E8F0', borderRadius: '6px' }}>
                         <table className="table" style={{ fontSize: '12px', margin: 0 }}>
                           <thead>
                             <tr style={{ background: '#F1F5F9' }}>
@@ -899,7 +928,7 @@ export default function SettlementsPage() {
                       </span>
                     </div>
                     {previewData.chiTiet?.donHang && previewData.chiTiet.donHang.length > 0 ? (
-                      <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #E2E8F0', borderRadius: '6px' }}>
+                      <div style={{ maxHeight: '260px', overflow: 'auto', border: '1px solid #E2E8F0', borderRadius: '6px' }}>
                         <table className="table" style={{ fontSize: '12px', margin: 0 }}>
                           <thead>
                             <tr style={{ background: '#F1F5F9' }}>
@@ -942,7 +971,7 @@ export default function SettlementsPage() {
                       <div style={{ fontSize: '13px', fontWeight: 700, color: '#1E293B', marginBottom: '8px' }}>
                         3. Chi phí công tác & thù lao Hướng dẫn viên ({previewData.chiTiet.hdv.length} nhân sự):
                       </div>
-                      <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid #E2E8F0', borderRadius: '6px' }}>
+                      <div style={{ maxHeight: '200px', overflow: 'auto', border: '1px solid #E2E8F0', borderRadius: '6px' }}>
                         <table className="table" style={{ fontSize: '12px', margin: 0 }}>
                           <thead>
                             <tr style={{ background: '#F1F5F9' }}>
@@ -1001,15 +1030,12 @@ export default function SettlementsPage() {
                 padding: '12px 20px',
                 borderTop: '1px solid var(--border)',
                 background: 'var(--zinc-50)',
+                flexShrink: 0,
               }}
             >
               <button
                 className="btn btn-outline"
-                onClick={() => {
-                  setIsCreateModalOpen(false);
-                  setSelectedLichId(null);
-                  setPreviewData(null);
-                }}
+                onClick={closeCreateModal}
                 disabled={creatingSettlement}
               >
                 Hủy bỏ
