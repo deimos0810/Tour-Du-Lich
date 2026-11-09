@@ -76,16 +76,7 @@ class HomeView extends GetView<HomeController> {
                           ],
                         ),
                       ),
-                    IconButton(
-                      onPressed: () => Get.snackbar(
-                        'Thông báo',
-                        'Bạn đã cập nhật những ưu đãi mới nhất.',
-                      ),
-                      icon: const Icon(
-                        Icons.notifications_none_rounded,
-                        color: AppColors.navy,
-                      ),
-                    ),
+                    app.buildNotificationBellButton(context),
                   ],
                 ),
               ),
@@ -93,37 +84,45 @@ class HomeView extends GetView<HomeController> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 5.w),
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 3.w, vertical: 1.h),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7ED),
-                    borderRadius: BorderRadius.circular(Responsive.radius(10)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.local_fire_department_rounded,
-                        color: AppColors.orange,
-                      ),
-                      SizedBox(width: 2.w),
-                      Expanded(
-                        child: Text(
-                          'promo_banner_text'.tr,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: AppColors.navy,
-                            fontSize: Responsive.font(10.5),
-                            fontWeight: FontWeight.w600,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(Responsive.radius(10)),
+                  onTap: () => app.showNotificationsSheet(context),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 3.w, vertical: 1.h),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(Responsive.radius(10)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.notifications_active_rounded,
+                          color: AppColors.orange,
+                        ),
+                        SizedBox(width: 2.w),
+                        Expanded(
+                          child: Obx(
+                            () => Text(
+                              app.notificationCount > 0
+                                  ? 'Bạn có ${app.notificationCount} thông báo nhắc lịch khởi hành & đánh giá tour'
+                                  : 'promo_banner_text'.tr,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: AppColors.navy,
+                                fontSize: Responsive.font(10.2),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                      Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        size: 3.w,
-                        color: AppColors.orange,
-                      ),
-                    ],
+                        Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 3.w,
+                          color: AppColors.orange,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

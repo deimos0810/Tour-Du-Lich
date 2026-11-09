@@ -7,8 +7,10 @@ import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_routes.dart';
+import '../../core/controllers/app_controller.dart';
 import '../../core/network/api_client.dart';
 import '../../data/services/payment_service.dart';
+import '../orders/orders_controller.dart';
 
 class BookingSuccessController extends GetxController
     with WidgetsBindingObserver {
@@ -145,8 +147,25 @@ class BookingSuccessController extends GetxController
     }
   }
 
-  void openOrders() => Get.offAllNamed(AppRoutes.home, arguments: {'tab': 3});
-  void openHome() => Get.offAllNamed(AppRoutes.home);
+  void openOrders() => _backToShell(3);
+  void openHome() => _backToShell(0);
+
+  /// Quay về khung chính với đúng tab mong muốn, sau đó làm mới
+  /// danh sách đơn + thông báo để trạng thái thanh toán hiển thị ngay.
+  void _backToShell(int tab) {
+    if (Get.isRegistered<AppController>()) {
+      Get.find<AppController>().selectedTab.value = tab;
+    }
+    Get.offAllNamed(AppRoutes.home, arguments: {'tab': tab});
+    Future<void>.delayed(const Duration(milliseconds: 350), () {
+      if (Get.isRegistered<OrdersController>()) {
+        unawaited(Get.find<OrdersController>().loadOrders());
+      }
+      if (Get.isRegistered<AppController>()) {
+        unawaited(Get.find<AppController>().loadNotifications());
+      }
+    });
+  }
 
   @override
   void onClose() {

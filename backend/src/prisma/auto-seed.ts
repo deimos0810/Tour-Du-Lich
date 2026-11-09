@@ -626,7 +626,7 @@ export async function autoSeedIfEmpty(prisma: PrismaClient): Promise<boolean> {
     return false;
   }
 
-  const defaultHash = hashPassword('123456');
+  const defaultHash = hashPassword('VietTour@2026');
 
   // 1. VaiTro
   await prisma.vaiTro.createMany({

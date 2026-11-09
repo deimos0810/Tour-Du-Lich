@@ -684,26 +684,75 @@ export class CustomerOpsService {
     });
   }
 
-  /** Thông báo trong ứng dụng: nhắc khởi hành, nhắc thanh toán, mời đánh giá */
+  /** Thông báo trong ứng dụng: nhắc khởi hành, nhắc thanh toán, mời đánh giá, hóa đơn vé QR */
   async notifications(customerId: number) {
     if (!customerId) return [];
     const orders = await this.prisma.donDatTour.findMany({
-      where: { KhachHangID: customerId, TrangThaiDon: { not: 'Da huy' } },
-      include: { LichKhoiHanh: { include: { Tour: { select: { TenTour: true, DiemKhoiHanh: true } } } }, DanhGia: true },
+      where: { KhachHangID: customerId },
+      include: {
+        LichKhoiHanh: { include: { Tour: { select: { TenTour: true, DiemKhoiHanh: true } } } },
+        DanhGia: true,
+        ChiTietHanhKhach: { select: { TrangThaiDiemDanh: true } },
+      },
+      orderBy: { NgayDat: 'desc' },
     });
     const now = Date.now();
     const list: { loai: string; tieuDe: string; noiDung: string; maDon: string; donHangId: number; thoiGian: Date }[] = [];
     for (const o of orders) {
       const l = o.LichKhoiHanh;
+      if (o.TrangThaiDon === 'Da huy') {
+        list.push({
+          loai: 'HUY_DON',
+          tieuDe: `Thông báo hủy đơn ${o.MaDon}`,
+          noiDung: `${l.Tour.TenTour}${o.GhiChu ? ` — ${o.GhiChu}` : ''}`,
+          maDon: o.MaDon,
+          donHangId: o.DonHangID,
+          thoiGian: o.NgayDat,
+        });
+        continue;
+      }
       const days = Math.ceil((l.NgayKhoiHanh.getTime() - now) / DAY);
-      if (days >= 0 && days <= 7 && o.TrangThaiDon !== 'Cho thanh toan') {
-        list.push({ loai: 'NHAC_LICH', tieuDe: days === 0 ? 'Hôm nay khởi hành!' : `Còn ${days} ngày nữa khởi hành`, noiDung: `${l.Tour.TenTour} — tập trung tại ${l.Tour.DiemKhoiHanh} lúc ${l.NgayKhoiHanh.toLocaleString('vi-VN')}. Nhớ mang CCCD và vé QR.`, maDon: o.MaDon, donHangId: o.DonHangID, thoiGian: l.NgayKhoiHanh });
+      const hasCheckedIn = o.ChiTietHanhKhach.some((p) => p.TrangThaiDiemDanh === 1);
+      const isPaidOrDone = o.TrangThaiDon === 'Da thanh toan' || o.TrangThaiDon === 'Hoan thanh' || o.TrangThaiDon === 'Da xac nhan';
+
+      if (days >= 0 && days <= 60 && o.TrangThaiDon !== 'Cho thanh toan') {
+        list.push({
+          loai: 'NHAC_LICH',
+          tieuDe: days === 0 ? 'Hôm nay khởi hành!' : `Còn ${days} ngày nữa khởi hành`,
+          noiDung: `${l.Tour.TenTour} — tập trung tại ${l.Tour.DiemKhoiHanh} lúc ${l.NgayKhoiHanh.toLocaleString('vi-VN')}. Nhớ mang CCCD và vé QR.`,
+          maDon: o.MaDon,
+          donHangId: o.DonHangID,
+          thoiGian: l.NgayKhoiHanh,
+        });
       }
       if (o.TrangThaiDon === 'Cho thanh toan' && l.NgayKhoiHanh.getTime() > now) {
-        list.push({ loai: 'THANH_TOAN', tieuDe: 'Đơn chưa thanh toán', noiDung: `Đơn ${o.MaDon} (${l.Tour.TenTour}) đang chờ thanh toán để giữ chỗ.`, maDon: o.MaDon, donHangId: o.DonHangID, thoiGian: o.NgayDat });
+        list.push({
+          loai: 'THANH_TOAN',
+          tieuDe: 'Đơn chưa thanh toán',
+          noiDung: `Đơn ${o.MaDon} (${l.Tour.TenTour}) đang chờ thanh toán để giữ chỗ và xuất vé QR.`,
+          maDon: o.MaDon,
+          donHangId: o.DonHangID,
+          thoiGian: o.NgayDat,
+        });
       }
-      if (l.NgayKetThuc.getTime() <= now && o.DanhGia.length === 0 && o.TrangThaiDon !== 'Cho thanh toan') {
-        list.push({ loai: 'DANH_GIA', tieuDe: 'Chia sẻ cảm nhận chuyến đi', noiDung: `Bạn đã hoàn thành ${l.Tour.TenTour}. Hãy đánh giá để giúp VietTour phục vụ tốt hơn!`, maDon: o.MaDon, donHangId: o.DonHangID, thoiGian: l.NgayKetThuc });
+      if (o.DanhGia.length === 0 && isPaidOrDone && (l.NgayKetThuc.getTime() <= now || hasCheckedIn || o.TrangThaiDon === 'Hoan thanh')) {
+        list.push({
+          loai: 'DANH_GIA',
+          tieuDe: 'Đánh giá & Phản hồi sau chuyến đi',
+          noiDung: `Cảm ơn bạn đã tham gia ${l.Tour.TenTour} (Đơn ${o.MaDon}). Hãy đánh giá sao và gửi phản hồi để giúp VietTour phục vụ tốt hơn!`,
+          maDon: o.MaDon,
+          donHangId: o.DonHangID,
+          thoiGian: l.NgayKetThuc,
+        });
+      } else if (o.DanhGia.length > 0) {
+        list.push({
+          loai: 'DA_DANH_GIA',
+          tieuDe: `Đã ghi nhận đánh giá ${o.DanhGia[0].SoSao} ⭐ — Đơn ${o.MaDon}`,
+          noiDung: `${l.Tour.TenTour}: "${o.DanhGia[0].BinhLuan || 'Chuyến đi tuyệt vời!'}"`,
+          maDon: o.MaDon,
+          donHangId: o.DonHangID,
+          thoiGian: o.DanhGia[0].NgayDanhGia,
+        });
       }
     }
     return list.sort((a, b) => b.thoiGian.getTime() - a.thoiGian.getTime());

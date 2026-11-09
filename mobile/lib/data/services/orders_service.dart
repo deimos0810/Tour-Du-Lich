@@ -44,14 +44,48 @@ class OrdersService {
     int bookingId, {
     required int stars,
     required String comment,
+    int? customerId,
   }) async {
-    await _api.postJson(
-      ApiConfig.bookingReview(bookingId),
-      body: {
-        'soSao': stars,
-        if (comment.trim().isNotEmpty) 'binhLuan': comment.trim(),
-      },
-    );
+    try {
+      await _api.postJson(
+        ApiConfig.portalReviews,
+        body: {
+          'donHangId': bookingId,
+          'soSao': stars,
+          'customerId': ?customerId,
+          if (comment.trim().isNotEmpty) 'binhLuan': comment.trim(),
+        },
+      );
+    } on ApiClientException catch (e) {
+      if (e.statusCode == 404) {
+        await _api.postJson(
+          ApiConfig.bookingReview(bookingId),
+          body: {
+            'soSao': stars,
+            if (comment.trim().isNotEmpty) 'binhLuan': comment.trim(),
+          },
+        );
+      } else {
+        rethrow;
+      }
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getPortalNotifications({
+    int? customerId,
+  }) async {
+    try {
+      final url = customerId != null
+          ? '${ApiConfig.portalNotifications}?customerId=$customerId'
+          : ApiConfig.portalNotifications;
+      final res = await _api.getJson(url);
+      if (res is List) {
+        return res.whereType<Map<String, dynamic>>().toList();
+      }
+    } catch (_) {
+      // Fallback sang tổng hợp từ danh sách đơn hàng local
+    }
+    return [];
   }
 
   Future<Map<String, dynamic>> getTicket(String bookingCode) async {

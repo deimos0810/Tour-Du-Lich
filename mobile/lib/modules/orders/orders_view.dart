@@ -44,28 +44,7 @@ class OrdersView extends GetView<OrdersController> {
           ),
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF0F172A),
-                side: const BorderSide(color: Color(0xFFCBD5E1)),
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                minimumSize: Size.zero,
-              ),
-              onPressed: () => app.showAccountSwitcherSheet(context),
-              icon: const Icon(Icons.swap_horiz_rounded, size: 15),
-              label: Obx(
-                () => Text(
-                  '${app.currentRoleLabel} ⇄ Đổi TK',
-                  style: TextStyle(
-                    fontSize: Responsive.font(8.8),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
+          app.buildNotificationBellButton(context),
           IconButton(
             onPressed: controller.loadOrders,
             icon: const Icon(Icons.refresh_rounded, size: 20),
@@ -224,6 +203,9 @@ class OrdersView extends GetView<OrdersController> {
                       booking: booking,
                       onTap: () => _showOrder(context, booking),
                       onOpenTicket: () => controller.openTicket(booking),
+                      onOpenInvoice: () => app.showInvoiceSheet(context, booking),
+                      onReview: () =>
+                          app.showReviewDialogForBooking(context, booking),
                       onPayVnpay: () => controller.payAgain(booking),
                     );
                   },
@@ -237,6 +219,7 @@ class OrdersView extends GetView<OrdersController> {
   }
 
   void _showOrder(BuildContext context, CustomerBookingModel booking) {
+    final app = Get.find<AppController>();
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -334,7 +317,7 @@ class OrdersView extends GetView<OrdersController> {
                   icon: Icons.credit_card_rounded,
                   onPressed: () {
                     Navigator.of(sheetContext).pop();
-                    controller.payAgain(booking);
+                    app.runAfterSheetClosed(() => controller.payAgain(booking));
                   },
                 ),
               ],
@@ -346,7 +329,19 @@ class OrdersView extends GetView<OrdersController> {
                   icon: Icons.qr_code_rounded,
                   onPressed: () {
                     Navigator.of(sheetContext).pop();
-                    Future.microtask(() => controller.openTicket(booking));
+                    app.runAfterSheetClosed(() => controller.openTicket(booking));
+                  },
+                ),
+                SizedBox(height: 1.h),
+                AppButton(
+                  label: 'Quản lý & Lưu trữ Hóa đơn (${booking.invoiceCode})',
+                  icon: Icons.receipt_long_rounded,
+                  outlined: true,
+                  onPressed: () {
+                    Navigator.of(sheetContext).pop();
+                    app.runAfterSheetClosed(() {
+                      if (context.mounted) app.showInvoiceSheet(context, booking);
+                    });
                   },
                 ),
               ],
@@ -354,12 +349,16 @@ class OrdersView extends GetView<OrdersController> {
               if (booking.canReview) ...[
                 SizedBox(height: 1.h),
                 AppButton(
-                  label: 'Đánh giá chuyến đi',
+                  label: 'Đánh giá & Phản hồi sau chuyến đi',
                   icon: Icons.star_outline_rounded,
                   outlined: true,
                   onPressed: () {
                     Navigator.of(sheetContext).pop();
-                    _showReviewDialog(context, booking);
+                    app.runAfterSheetClosed(() {
+                      if (context.mounted) {
+                        app.showReviewDialogForBooking(context, booking);
+                      }
+                    });
                   },
                 ),
               ],
@@ -371,7 +370,9 @@ class OrdersView extends GetView<OrdersController> {
                   outlined: true,
                   onPressed: () {
                     Navigator.of(sheetContext).pop();
-                    _confirmCancellation(context, booking);
+                    app.runAfterSheetClosed(() {
+                      if (context.mounted) _confirmCancellation(context, booking);
+                    });
                   },
                 ),
               ],
@@ -407,70 +408,6 @@ class OrdersView extends GetView<OrdersController> {
     );
     if (confirmed == true) await controller.cancelBooking(booking);
   }
-
-  Future<void> _showReviewDialog(
-    BuildContext context,
-    CustomerBookingModel booking,
-  ) async {
-    var stars = 5;
-    final comment = TextEditingController();
-    var submitted = false;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Đánh giá chuyến đi'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  5,
-                  (index) => IconButton(
-                    onPressed: () => setState(() => stars = index + 1),
-                    icon: Icon(
-                      index < stars ? Icons.star_rounded : Icons.star_outline,
-                      color: AppColors.star,
-                    ),
-                  ),
-                ),
-              ),
-              TextField(
-                controller: comment,
-                maxLength: 2000,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  hintText: 'Chia sẻ trải nghiệm của bạn (không bắt buộc)',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Để sau'),
-            ),
-            FilledButton(
-              onPressed: () {
-                submitted = true;
-                Navigator.pop(context);
-              },
-              child: const Text('Gửi đánh giá'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (submitted) {
-      await controller.submitReview(
-        booking,
-        stars: stars,
-        comment: comment.text,
-      );
-    }
-    comment.dispose();
-  }
 }
 
 class _OrderCard extends StatelessWidget {
@@ -478,12 +415,16 @@ class _OrderCard extends StatelessWidget {
     required this.booking,
     required this.onTap,
     required this.onOpenTicket,
+    required this.onOpenInvoice,
+    required this.onReview,
     required this.onPayVnpay,
   });
 
   final CustomerBookingModel booking;
   final VoidCallback onTap;
   final VoidCallback onOpenTicket;
+  final VoidCallback onOpenInvoice;
+  final VoidCallback onReview;
   final VoidCallback onPayVnpay;
 
   @override
@@ -505,6 +446,7 @@ class _OrderCard extends StatelessWidget {
         : isCancelled
         ? const Color(0xFFBE123C)
         : const Color(0xFFB45309);
+    final daysUntil = booking.daysUntilDeparture;
 
     return Container(
       decoration: BoxDecoration(
@@ -523,12 +465,16 @@ class _OrderCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Mã đơn: ${booking.code}',
-                    style: TextStyle(
-                      fontSize: Responsive.font(10.5),
-                      color: const Color(0xFF0F172A),
-                      fontWeight: FontWeight.w800,
+                  Expanded(
+                    child: Text(
+                      'Mã đơn: ${booking.code}${isPaid ? " • HĐ: ${booking.invoiceCode}" : ""}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: Responsive.font(10),
+                        color: const Color(0xFF0F172A),
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   Container(
@@ -601,16 +547,97 @@ class _OrderCard extends StatelessWidget {
                   ),
                 ],
               ),
+
+              // Banner nhắc lịch khởi hành trực tiếp trên thẻ đơn
+              if (!isCancelled && daysUntil >= 0 && daysUntil <= 60) ...[
+                SizedBox(height: 1.h),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F9FF),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFBAE6FD)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.alarm_on_rounded,
+                        size: 14,
+                        color: Color(0xFF0284C7),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          daysUntil == 0
+                              ? 'Nhắc lịch: Hôm nay khởi hành tại ${booking.departurePoint}'
+                              : 'Nhắc lịch: Còn $daysUntil ngày khởi hành (${booking.departurePoint})',
+                          style: TextStyle(
+                            fontSize: Responsive.font(8.8),
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0369A1),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              // Hiển thị đánh giá & phản hồi đã gửi
+              if (booking.hasReviewed) ...[
+                SizedBox(height: 1.h),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.stars_rounded,
+                        size: 15,
+                        color: Color(0xFFD97706),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Đã đánh giá ${booking.reviewStars ?? 5}/5 ⭐: "${(booking.reviewComment ?? "Chuyến đi tuyệt vời!").trim()}"',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: Responsive.font(8.8),
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF92400E),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
               SizedBox(height: 1.2.h),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                alignment: WrapAlignment.end,
                 children: [
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF0F172A),
                       side: const BorderSide(color: Color(0xFFCBD5E1)),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
+                        horizontal: 10,
                         vertical: 6,
                       ),
                       minimumSize: Size.zero,
@@ -620,18 +647,62 @@ class _OrderCard extends StatelessWidget {
                     child: Text(
                       'Chi tiết',
                       style: TextStyle(
-                        fontSize: Responsive.font(10),
+                        fontSize: Responsive.font(9.5),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  if (isPaid)
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF0F172A),
+                        side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: onOpenInvoice,
+                      icon: const Icon(Icons.receipt_long_outlined, size: 14),
+                      label: Text(
+                        'Hóa đơn',
+                        style: TextStyle(
+                          fontSize: Responsive.font(9.5),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  if (booking.canReview)
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFB45309),
+                        backgroundColor: const Color(0xFFFFFBEB),
+                        side: const BorderSide(color: Color(0xFFF59E0B)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: onReview,
+                      icon: const Icon(Icons.star_rounded, size: 14),
+                      label: Text(
+                        'Đánh giá',
+                        style: TextStyle(
+                          fontSize: Responsive.font(9.5),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   if (isPaid)
                     FilledButton.icon(
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF15803D),
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
+                          horizontal: 11,
                           vertical: 6,
                         ),
                         minimumSize: Size.zero,
@@ -642,7 +713,7 @@ class _OrderCard extends StatelessWidget {
                       label: Text(
                         'Vé điện tử QR',
                         style: TextStyle(
-                          fontSize: Responsive.font(10),
+                          fontSize: Responsive.font(9.5),
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -652,7 +723,7 @@ class _OrderCard extends StatelessWidget {
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFF0F172A),
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
+                          horizontal: 11,
                           vertical: 6,
                         ),
                         minimumSize: Size.zero,
@@ -663,7 +734,7 @@ class _OrderCard extends StatelessWidget {
                       label: Text(
                         'Thanh toán VNPAY',
                         style: TextStyle(
-                          fontSize: Responsive.font(10),
+                          fontSize: Responsive.font(9.5),
                           fontWeight: FontWeight.w700,
                         ),
                       ),

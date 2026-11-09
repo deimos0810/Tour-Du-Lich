@@ -557,6 +557,41 @@ export class BookingsService {
   updateStatus(id: number, TrangThaiDon: string) {
     return this.prisma.donDatTour.update({ where: { DonHangID: id }, data: { TrangThaiDon } });
   }
+
+  async submitReview(id: number, b: { soSao: number; binhLuan?: string }) {
+    const sao = Number(b.soSao);
+    if (!Number.isInteger(sao) || sao < 1 || sao > 5) throw new BadRequestException('Số sao phải từ 1 đến 5');
+    const don = await this.prisma.donDatTour.findUnique({ where: { DonHangID: id }, include: { LichKhoiHanh: true } });
+    if (!don) throw new NotFoundException('Không tìm thấy đơn hàng');
+    if (don.TrangThaiDon === 'Da huy' || don.TrangThaiDon === 'Cho thanh toan') {
+      throw new BadRequestException('Chỉ được đánh giá các tour đã thanh toán hoặc đã hoàn thành');
+    }
+    const existing = await this.prisma.danhGia.findUnique({
+      where: { KhachHangID_DonHangID: { KhachHangID: don.KhachHangID, DonHangID: don.DonHangID } },
+    });
+    if (existing) {
+      return this.prisma.danhGia.update({
+        where: { DanhGiaID: existing.DanhGiaID },
+        data: { SoSao: sao, BinhLuan: b.binhLuan?.trim() || existing.BinhLuan },
+      });
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const dg = await tx.danhGia.create({
+        data: {
+          KhachHangID: don.KhachHangID,
+          DonHangID: don.DonHangID,
+          TourID: don.LichKhoiHanh.TourID,
+          SoSao: sao,
+          BinhLuan: b.binhLuan?.trim() || null,
+          TrangThaiDuyet: 'Da hien thi',
+        },
+      });
+      if (don.TrangThaiDon !== 'Hoan thanh') {
+        await tx.donDatTour.update({ where: { DonHangID: don.DonHangID }, data: { TrangThaiDon: 'Hoan thanh' } });
+      }
+      return dg;
+    });
+  }
 }
 
 const STAFF = ['Admin', 'Dieu hanh', 'Ke toan'] as const;
@@ -642,6 +677,13 @@ export class BookingsController {
     @Req() req?: { user?: { email?: string; roles?: string[] } },
   ) {
     return this.service.cancel(id, lyDoHuy, req?.user?.email, req?.user?.roles);
+  }
+  @Post(':id/review')
+  review(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() b: { soSao: number; binhLuan?: string },
+  ) {
+    return this.service.submitReview(id, b);
   }
   @Patch(':id/status') @UseGuards(JwtAuthGuard, RolesGuard) @Roles(...STAFF)
   status(@Param('id', ParseIntPipe) id: number, @Body('TrangThaiDon') s: string) { return this.service.updateStatus(id, s); }

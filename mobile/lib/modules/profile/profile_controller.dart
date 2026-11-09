@@ -126,6 +126,7 @@ class ProfileController extends GetxController {
       logoutError = error.message;
     }
     await AuthSession.instance.clear();
+    _app.resetSessionState();
     _app.currentUser.value = null;
     Get.offAllNamed(AppRoutes.login);
     if (logoutError != null) {

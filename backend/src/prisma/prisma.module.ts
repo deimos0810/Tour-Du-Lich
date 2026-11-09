@@ -1,6 +1,7 @@
 import { Global, Injectable, Logger, Module, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { autoSeedIfEmpty } from './auto-seed.js';
+import { hashPassword } from '../common/password.js';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -217,6 +218,72 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           AND EXISTS (SELECT 1 FROM chuongtrinhkhuyenmai WHERE ctkmid = 1)
         ON CONFLICT (ctkmid, tourid) DO NOTHING;
       `);
+
+      // Cập nhật mật khẩu chuẩn hóa cho toàn bộ tài khoản mẫu tuân thủ quy tắc mật khẩu mạnh
+      const testAccounts = [
+        { email: 'admin@viettour.vn', pass: 'Admin@123456', roleId: 1, name: 'Nguyễn Văn Quản Trị' },
+        { email: 'dieuhanh@viettour.vn', pass: 'Dieuhanh@123456', roleId: 2, name: 'Phạm Thu Hà' },
+        { email: 'dieuhanh1@viettour.vn', pass: 'Dieuhanh@123456', roleId: 2, name: 'Phạm Thu Hà' },
+        { email: 'ketoan@viettour.vn', pass: 'Ketoan@123456', roleId: 3, name: 'Trần Minh Đức' },
+        { email: 'ketoan1@viettour.vn', pass: 'Ketoan@123456', roleId: 3, name: 'Trần Minh Đức' },
+        { email: 'hdv1@viettour.vn', pass: 'Hdvnam@123456', roleId: 4, name: 'Lê Hoàng Nam' },
+        { email: 'hdv.nam@viettour.vn', pass: 'Hdvnam@123456', roleId: 4, name: 'Lê Hoàng Nam' },
+        { email: 'hdv.mai@viettour.vn', pass: 'Hdvmai@123456', roleId: 4, name: 'Trần Thị Tuyết Mai' },
+        { email: 'hdv.khoa@viettour.vn', pass: 'Hdvkhoa@123456', roleId: 4, name: 'Nguyễn Đăng Khoa' },
+        { email: 'hdv.huong@viettour.vn', pass: 'Hdvhuong@123456', roleId: 4, name: 'Đỗ Lan Hương' },
+        { email: 'hdv.tuan@viettour.vn', pass: 'Hdvtuan@123456', roleId: 4, name: 'Vũ Minh Tuấn' },
+        { email: 'dong@gmail.com', pass: 'Dong@123456', roleId: 5, name: 'Lương Viễn Đông', phone: '0901230180', cccd: '079201001234' },
+        { email: 'tu@gmail.com', pass: 'Tu@123456', roleId: 5, name: 'Trần Anh Tú', phone: '0901230844', cccd: '079201008441' },
+        { email: 'khach1@gmail.com', pass: 'Khach1@123456', roleId: 5, name: 'Nguyễn Văn Hùng', phone: '0908123456', cccd: '031092008761' },
+        { email: 'khach.hung@gmail.com', pass: 'Khach1@123456', roleId: 5, name: 'Nguyễn Văn Hùng', phone: '0908123456', cccd: '031092008761' },
+        { email: 'khach.thao@yahoo.com', pass: 'Khachthao@123456', roleId: 5, name: 'Trần Thị Thu Thảo', phone: '0912987654', cccd: '079188004321' },
+      ];
+
+      for (const acc of testAccounts) {
+        try {
+          const hash = hashPassword(acc.pass);
+          const existing = await this.taiKhoan.findUnique({ where: { Email: acc.email } });
+          if (existing) {
+            await this.taiKhoan.update({
+              where: { TaiKhoanID: existing.TaiKhoanID },
+              data: { MatKhauHash: hash, TrangThai: 1 },
+            });
+          } else {
+            const created = await this.taiKhoan.create({
+              data: {
+                Email: acc.email,
+                MatKhauHash: hash,
+                SoDienThoai: acc.phone || '0901000000',
+                TrangThai: 1,
+              },
+            });
+            await this.phanQuyen.create({
+              data: { TaiKhoanID: created.TaiKhoanID, VaiTroID: acc.roleId },
+            });
+            if (acc.roleId === 5) {
+              await this.khachHang.create({
+                data: {
+                  TaiKhoanID: created.TaiKhoanID,
+                  HoTen: acc.name,
+                  SoDienThoai: acc.phone || '0901000000',
+                  Email: acc.email,
+                  CCCD: acc.cccd || null,
+                },
+              });
+            }
+          }
+        } catch {}
+      }
+
+      // Xóa tài khoản test thừa van@gmail.com nếu có
+      try {
+        const vanTk = await this.taiKhoan.findUnique({ where: { Email: 'van@gmail.com' } });
+        if (vanTk) {
+          await this.phanQuyen.deleteMany({ where: { TaiKhoanID: vanTk.TaiKhoanID } });
+          await this.khachHang.deleteMany({ where: { TaiKhoanID: vanTk.TaiKhoanID } });
+          await this.taiKhoan.delete({ where: { TaiKhoanID: vanTk.TaiKhoanID } });
+        }
+      } catch {}
 
       this.logger.log('Database upgrade schema verified and synchronized.');
     } catch (err) {

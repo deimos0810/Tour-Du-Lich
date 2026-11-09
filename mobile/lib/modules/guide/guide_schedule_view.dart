@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:sizer/sizer.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/controllers/app_controller.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/responsive.dart';
 import '../../core/widgets/app_network_image.dart';
@@ -23,7 +24,7 @@ class GuideScheduleView extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(controller),
+            _buildHeader(context, controller),
             _buildFilterTabs(controller),
             Expanded(
               child: Obx(() {
@@ -58,7 +59,11 @@ class GuideScheduleView extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(GuideScheduleController controller) {
+  Widget _buildHeader(
+    BuildContext context,
+    GuideScheduleController controller,
+  ) {
+    final app = Get.find<AppController>();
     return Container(
       padding: EdgeInsets.fromLTRB(4.w, 1.5.h, 4.w, 1.5.h),
       decoration: const BoxDecoration(
@@ -140,8 +145,15 @@ class GuideScheduleView extends StatelessWidget {
                   );
                 }),
               ),
+              app.buildNotificationBellButton(context),
               IconButton(
-                onPressed: () => Get.to(() => const GuideQrScannerView()),
+                onPressed: () async {
+                  await Get.to(() => const GuideQrScannerView());
+                  // Quay lại từ màn quét → tải lại tiến độ điểm danh ngay
+                  if (Get.isRegistered<GuideScheduleController>()) {
+                    Get.find<GuideScheduleController>().loadSchedule();
+                  }
+                },
                 tooltip: 'Quét QR soát vé',
                 icon: Container(
                   padding: const EdgeInsets.all(8),
@@ -525,7 +537,12 @@ class GuideScheduleView extends StatelessWidget {
                     Expanded(
                       flex: 10,
                       child: ElevatedButton.icon(
-                        onPressed: () => Get.to(() => GuideQrScannerView(schedule: item)),
+                        onPressed: () async {
+                          await Get.to(() => GuideQrScannerView(schedule: item));
+                          if (Get.isRegistered<GuideScheduleController>()) {
+                            Get.find<GuideScheduleController>().loadSchedule();
+                          }
+                        },
                         icon: const Icon(Icons.qr_code_scanner_rounded, size: 14),
                         label: Text(
                           'Soát vé',

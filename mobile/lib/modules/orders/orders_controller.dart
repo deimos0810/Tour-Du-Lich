@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_routes.dart';
+import '../../core/controllers/app_controller.dart';
 import '../../core/network/api_client.dart';
 import '../../data/models/customer_booking_model.dart';
 import '../../data/services/orders_service.dart';
@@ -61,6 +62,9 @@ class OrdersController extends GetxController with WidgetsBindingObserver {
     errorMessage.value = '';
     try {
       allOrders.assignAll(await _ordersService.getMyBookings());
+      if (Get.isRegistered<AppController>()) {
+        unawaited(Get.find<AppController>().loadNotifications());
+      }
     } on ApiClientException catch (error) {
       errorMessage.value = error.message;
     } finally {

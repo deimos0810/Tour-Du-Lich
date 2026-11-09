@@ -39,28 +39,6 @@ class TicketView extends GetView<TicketController> {
           ),
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF0F172A),
-                side: const BorderSide(color: Color(0xFFCBD5E1)),
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                minimumSize: Size.zero,
-              ),
-              onPressed: () => app.showAccountSwitcherSheet(context),
-              icon: const Icon(Icons.swap_horiz_rounded, size: 15),
-              label: Obx(
-                () => Text(
-                  '${app.currentRoleLabel} ⇄ Đổi TK',
-                  style: TextStyle(
-                    fontSize: Responsive.font(8.8),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
           IconButton(
             onPressed: controller.loadTicket,
             icon: const Icon(Icons.refresh_rounded, size: 20),

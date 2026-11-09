@@ -31,6 +31,10 @@ abstract final class ApiConfig {
   static String get resetPassword => '$baseUrl/auth/reset-password';
   static String get customerBooking => '$baseUrl/auth/customer-booking';
   static String get myBookings => '$baseUrl/portal/my-bookings';
+  static String get portalNotifications => '$baseUrl/portal/notifications';
+  static String get portalCancellationNotices =>
+      '$baseUrl/portal/cancellation-notices';
+  static String get portalReviews => '$baseUrl/portal/reviews';
 
   static String get bookings => '$baseUrl/bookings';
   static String get validateVoucher => '$bookings/voucher/validate';
