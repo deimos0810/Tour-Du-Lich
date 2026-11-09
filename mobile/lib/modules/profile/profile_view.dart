@@ -7,6 +7,7 @@ import 'package:viet_tour/core/utils/responsive.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/controllers/app_controller.dart';
+import '../auth/auth_controller.dart';
 import 'profile_controller.dart';
 
 class ProfileView extends GetView<ProfileController> {
@@ -119,11 +120,6 @@ class ProfileView extends GetView<ProfileController> {
           ),
           SizedBox(height: 2.5.h),
           _group('my_account'.tr, [
-            _item(
-              Icons.swap_horiz_rounded,
-              'switch_account'.tr,
-              () => Get.find<AppController>().showAccountSwitcherSheet(context),
-            ),
             _item(
               Icons.person_outline_rounded,
               'personal_info'.tr,
@@ -369,13 +365,11 @@ class ProfileView extends GetView<ProfileController> {
                   SizedBox(height: 1.8.h),
                   AppTextField(
                     label: 'Mật khẩu mới',
-                    hint: 'Ít nhất 8 ký tự',
+                    hint: 'Tối thiểu 8 ký tự, chữ hoa, chữ thường, ký tự đặc biệt',
                     prefixIcon: Icons.lock_reset_rounded,
                     controller: newPassword,
                     obscureText: true,
-                    validator: (value) => value == null || value.length < 8
-                        ? 'Mật khẩu mới cần ít nhất 8 ký tự'
-                        : null,
+                    validator: AuthController.validateStrongPassword,
                   ),
                   SizedBox(height: 1.8.h),
                   AppTextField(

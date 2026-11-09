@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { uiAlert } from '@/lib/ui';
+import { firstError, registerSchema } from '@/lib/validations';
 
 export default function CustomerRegisterPage() {
   const router = useRouter();
@@ -17,6 +18,11 @@ export default function CustomerRegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const invalid = firstError(registerSchema, { hoTen, email, phone, password, cccd });
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -71,7 +77,7 @@ export default function CustomerRegisterPage() {
 
           <div>
             <label style={{ fontSize: '12.5px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Mật khẩu <span style={{ color: 'red' }}>*</span></label>
-            <input className="input" type="password" required style={{ width: '100%' }} placeholder="Nhập mật khẩu của bạn" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <input className="input" type="password" required style={{ width: '100%' }} placeholder="Tối thiểu 8 ký tự, có chữ hoa, chữ thường, ký tự đặc biệt" value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
 
           <button className="btn btn-primary" type="submit" disabled={loading} style={{ marginTop: '10px' }}>

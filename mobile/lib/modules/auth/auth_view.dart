@@ -144,7 +144,9 @@ class _AuthViewState extends State<AuthView> {
                       Obx(
                         () => AppTextField(
                           label: 'Mật khẩu',
-                          hint: 'Ít nhất 6 ký tự',
+                          hint: route == AppRoutes.login
+                              ? 'Nhập mật khẩu'
+                              : 'Tối thiểu 8 ký tự, chữ hoa, chữ thường, ký tự đặc biệt',
                           prefixIcon: Icons.lock_outline_rounded,
                           controller: controller.password,
                           obscureText: controller.obscurePassword.value,
@@ -181,7 +183,7 @@ class _AuthViewState extends State<AuthView> {
                             SizedBox(height: 2.h),
                             AppTextField(
                               label: 'Mật khẩu mới',
-                              hint: 'Ít nhất 6 ký tự',
+                              hint: 'Tối thiểu 8 ký tự, chữ hoa, chữ thường, ký tự đặc biệt',
                               prefixIcon: Icons.lock_reset_rounded,
                               controller: controller.newPassword,
                               validator: controller.validatePassword,

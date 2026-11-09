@@ -10,7 +10,7 @@ import '../../data/services/auth_service.dart';
 
 class AuthController extends GetxController {
   AuthController({AuthService? authService})
-      : _authService = authService ?? AuthService();
+    : _authService = authService ?? AuthService();
 
   final AuthService _authService;
 
@@ -91,10 +91,18 @@ class AuthController extends GetxController {
   }
 
   String? validatePassword(String? value) {
-    final minimum = Get.currentRoute == AppRoutes.login ? 6 : 8;
-    if (value == null || value.length < minimum) {
-      return 'Mật khẩu cần ít nhất $minimum ký tự';
-    }
+    if (value == null || value.isEmpty) return 'Vui lòng nhập mật khẩu';
+    // Đăng nhập: chỉ cần nhập; Đăng ký / đặt lại mật khẩu: áp dụng chính sách mật khẩu mạnh.
+    if (Get.currentRoute == AppRoutes.login) return null;
+    return validateStrongPassword(value);
+  }
+
+  static String? validateStrongPassword(String? value) {
+    const message = 'Mật khẩu tối thiểu 8 ký tự, gồm chữ thường, chữ in hoa và ký tự đặc biệt';
+    if (value == null || value.length < 8) return message;
+    if (!RegExp(r'[a-z]').hasMatch(value)) return message;
+    if (!RegExp(r'[A-Z]').hasMatch(value)) return message;
+    if (!RegExp(r'[^A-Za-z0-9]').hasMatch(value)) return message;
     return null;
   }
 
@@ -209,9 +217,13 @@ class AuthController extends GetxController {
         password: effPassword,
       );
       final user = result['user'] as Map<String, dynamic>?;
-      final accessToken = (result['accessToken'] ?? result['token'])?.toString();
+      final accessToken = (result['accessToken'] ?? result['token'])
+          ?.toString();
       final refreshToken = (result['refreshToken'] ?? accessToken)?.toString();
-      if (user == null || accessToken == null || accessToken.isEmpty || refreshToken == null) {
+      if (user == null ||
+          accessToken == null ||
+          accessToken.isEmpty ||
+          refreshToken == null) {
         throw const ApiAuthException(
           statusCode: 502,
           message: 'Máy chủ chưa trả về phiên đăng nhập hợp lệ.',
@@ -223,7 +235,9 @@ class AuthController extends GetxController {
         user: user,
       );
       if (Get.isRegistered<AppController>()) {
-        Get.find<AppController>().currentUser.value = user;
+        final app = Get.find<AppController>();
+        app.resetSessionState();
+        app.currentUser.value = user;
       }
       Get.snackbar(
         'Đăng nhập thành công',
@@ -261,8 +275,6 @@ class AuthController extends GetxController {
 
 class AuthBinding extends Bindings {
   @override
-  void dependencies() => Get.lazyPut<AuthController>(
-        AuthController.new,
-        fenix: true,
-      );
+  void dependencies() =>
+      Get.lazyPut<AuthController>(AuthController.new, fenix: true);
 }

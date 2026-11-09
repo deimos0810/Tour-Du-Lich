@@ -3,7 +3,7 @@ import { z } from 'zod';
 /** Số điện thoại Việt Nam: 10-11 chữ số, bắt đầu bằng 0. */
 const phone = z.string().trim().regex(/^0\d{9,10}$/, 'Số điện thoại gồm 10-11 chữ số và bắt đầu bằng 0');
 const email = z.string().trim().regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Email không đúng định dạng');
-const password = z.string().min(6, 'Mật khẩu tối thiểu 6 ký tự');
+const password = z.string().min(8, 'Mật khẩu tối thiểu 8 ký tự, gồm chữ thường, chữ in hoa và ký tự đặc biệt').regex(/[a-z]/, 'Mật khẩu tối thiểu 8 ký tự, gồm chữ thường, chữ in hoa và ký tự đặc biệt').regex(/[A-Z]/, 'Mật khẩu tối thiểu 8 ký tự, gồm chữ thường, chữ in hoa và ký tự đặc biệt').regex(/[^A-Za-z0-9]/, 'Mật khẩu tối thiểu 8 ký tự, gồm chữ thường, chữ in hoa và ký tự đặc biệt');
 const cccd = z.string().trim().regex(/^\d{12}$/, 'CCCD phải gồm đúng 12 chữ số');
 
 /** Đăng ký khách hàng. */

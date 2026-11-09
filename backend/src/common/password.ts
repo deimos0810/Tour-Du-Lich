@@ -24,6 +24,8 @@ export function verifyPassword(plain: string, stored: string): boolean {
 }
 
 export function validatePasswordStrength(pw: string) {
-  if (!pw || pw.length < 6) return 'Mật khẩu phải có ít nhất 6 ký tự';
+  if (!pw || pw.length < 8 || !/[a-z]/.test(pw) || !/[A-Z]/.test(pw) || !/[^A-Za-z0-9]/.test(pw)) {
+    return 'Mật khẩu tối thiểu 8 ký tự, gồm chữ thường, chữ in hoa và ký tự đặc biệt';
+  }
   return null;
 }

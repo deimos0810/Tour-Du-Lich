@@ -295,7 +295,7 @@ export default function UsersPage() {
                             className="btn btn-outline btn-sm"
                             onClick={() => {
                               setResetPwUser(u);
-                              setNewPassword('123456');
+                              setNewPassword('VietTour@2026');
                             }}
                             title="Đặt lại mật khẩu"
                           >
@@ -479,7 +479,7 @@ export default function UsersPage() {
                   className="input"
                   style={{ width: '100%', fontWeight: 700 }}
                   required
-                  minLength={6}
+                  minLength={8}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                 />
@@ -599,8 +599,8 @@ export default function UsersPage() {
                     className="input"
                     style={{ width: '100%' }}
                     required
-                    minLength={6}
-                    placeholder="Ít nhất 6 ký tự"
+                    minLength={8}
+                    placeholder="Ít nhất 8 ký tự, có chữ hoa, chữ thường, ký tự đặc biệt"
                     value={staffForm.password}
                     onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
                   />

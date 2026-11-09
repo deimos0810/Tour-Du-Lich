@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
-import { firstError, registerSchema } from '@/lib/validations';
+import { changePasswordSchema, firstError, registerSchema } from '@/lib/validations';
 import { X } from 'lucide-react';
 
 type AuthScreen = 'login' | 'register' | 'forgot_email' | 'forgot_reset';
@@ -122,6 +122,11 @@ export default function LoginPage() {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
       setErrorMessage('Mật khẩu xác nhận không trùng khớp!');
+      return;
+    }
+    const weak = firstError(changePasswordSchema.shape.newPassword, newPassword);
+    if (weak) {
+      setErrorMessage(weak);
       return;
     }
     setLoading(true);
@@ -413,7 +418,7 @@ export default function LoginPage() {
 
                 <div>
                   <label style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B', display: 'block', marginBottom: '4px' }}>Mật khẩu <span style={{ color: '#DC2626' }}>*</span></label>
-                  <input className="input" type="password" required style={{ width: '100%' }} placeholder="Tối thiểu 6 ký tự" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} />
+                  <input className="input" type="password" required style={{ width: '100%' }} placeholder="Tối thiểu 8 ký tự, có chữ hoa, chữ thường, ký tự đặc biệt" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} />
                 </div>
 
                 <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', padding: '12px', fontSize: '15px', fontWeight: 700, marginTop: '6px' }}>
