@@ -7,7 +7,7 @@ import { api, getImageUrl, useApi, getApiUrl, openVNPayGateway } from '@/lib/api
 import { bookingSchema, firstError } from '@/lib/validations';
 import { uiAlert, vnd } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
-import { Plane, Building2, Utensils, ShieldCheck, Check, X, CheckCircle2, Star, Lock, Smartphone } from 'lucide-react';
+import { Plane, Building2, Utensils, ShieldCheck, Check, X, CheckCircle2, Star, Lock, Smartphone, Heart } from 'lucide-react';
 
 type Review = {
   DanhGiaID: number;
@@ -58,6 +58,22 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
     ApDungVoucher?: Array<{ Tour: { TourID: number } }>;
   }>>('/portal/vouchers');
   const tour = tourApi.data;
+
+  // ❤️ Favorites (localStorage)
+  const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('viettour_favorites');
+      if (saved) setFavoriteIds(JSON.parse(saved).map(Number).filter(Boolean));
+    } catch { /* ignore */ }
+  }, []);
+  const toggleFavorite = (id: number) => {
+    setFavoriteIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      localStorage.setItem('viettour_favorites', JSON.stringify(next));
+      return next;
+    });
+  };
 
   // Đồng hồ thời gian thực (mỗi 1 giây) để tự động gỡ khuyến mãi/voucher ngay khi hết hạn (ngày, giờ, giây)
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
@@ -551,6 +567,27 @@ export default function TourDetailPage({ params }: { params: Promise<{ id: strin
               alt={tour.TenTour}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
+            {/* ❤️ FAVORITE BUTTON */}
+            <button
+              onClick={() => toggleFavorite(tour.TourID)}
+              style={{
+                position: 'absolute', top: '16px', right: '16px',
+                width: '42px', height: '42px', borderRadius: '50%',
+                background: 'rgba(255,255,255,0.95)', border: 'none',
+                display: 'grid', placeItems: 'center', cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+                transition: 'transform 0.15s',
+                zIndex: 2,
+              }}
+              title={favoriteIds.includes(tour.TourID) ? 'Bỏ yêu thích' : 'Lưu tour yêu thích'}
+            >
+              <Heart
+                size={20}
+                strokeWidth={2}
+                fill={favoriteIds.includes(tour.TourID) ? '#BE123C' : 'none'}
+                color={favoriteIds.includes(tour.TourID) ? '#BE123C' : '#475569'}
+              />
+            </button>
             <div style={{
               position: 'absolute', bottom: 0, insetInline: 0,
               background: 'linear-gradient(to top, rgba(15,23,42,0.85) 0%, transparent 100%)',

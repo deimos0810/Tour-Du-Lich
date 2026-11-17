@@ -7,7 +7,7 @@ import { api, getImageUrl, useApi, getApiUrl, openVNPayGateway } from '@/lib/api
 import { bookingSchema, firstError } from '@/lib/validations';
 import { ApiNotice, uiAlert, vnd } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
-import { Search, MapPin, Calendar, Users, Clock, Plane, Star, Ticket, Check, X, CheckCircle2, ShieldCheck, Lock, Smartphone } from 'lucide-react';
+import { Search, MapPin, Calendar, Users, Clock, Plane, Star, Ticket, Check, X, CheckCircle2, ShieldCheck, Lock, Smartphone, Heart } from 'lucide-react';
 
 type Review = {
   DanhGiaID: number;
@@ -52,6 +52,22 @@ type PassengerInput = {
 
 export default function CustomerHomePage() {
   const { user } = useAuth();
+
+  // ❤️ Favorites (localStorage)
+  const [favoriteIds, setFavoriteIds] = useState<number[]>([]);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('viettour_favorites');
+      if (saved) setFavoriteIds(JSON.parse(saved).map(Number).filter(Boolean));
+    } catch { /* ignore */ }
+  }, []);
+  const toggleFavorite = (id: number) => {
+    setFavoriteIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      localStorage.setItem('viettour_favorites', JSON.stringify(next));
+      return next;
+    });
+  };
 
   // Search & Filter state (Flight & Tour Search Engine)
   const [searchMode, setSearchMode] = useState<'FLIGHT' | 'COACH' | 'DEAL'>('FLIGHT');
@@ -930,6 +946,27 @@ export default function CustomerHomePage() {
                         </span>
                       )}
                     </div>
+                    {/* ❤️ FAVORITE BUTTON */}
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFavorite(t.TourID); }}
+                      style={{
+                        position: 'absolute', top: '10px', right: '10px',
+                        width: '32px', height: '32px', borderRadius: '50%',
+                        background: 'rgba(255,255,255,0.92)', border: 'none',
+                        display: 'grid', placeItems: 'center', cursor: 'pointer',
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
+                        transition: 'transform 0.15s',
+                        zIndex: 2,
+                      }}
+                      title={favoriteIds.includes(t.TourID) ? 'Bỏ yêu thích' : 'Lưu tour yêu thích'}
+                    >
+                      <Heart
+                        size={15}
+                        strokeWidth={2}
+                        fill={favoriteIds.includes(t.TourID) ? '#BE123C' : 'none'}
+                        color={favoriteIds.includes(t.TourID) ? '#BE123C' : '#475569'}
+                      />
+                    </button>
                     <div style={{ position: 'absolute', bottom: '10px', right: '10px', background: 'rgba(15, 23, 42, 0.85)', color: '#FFF', fontSize: '11px', padding: '3px 8px', borderRadius: 'var(--radius-sm)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                       <Clock size={11} strokeWidth={1.5} /> {t.ThoiGian}
                     </div>
