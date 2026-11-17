@@ -577,11 +577,20 @@ class GuideScheduleView extends StatelessWidget {
     Color text = const Color(0xFFD97706);
     String label = 'Chờ xác nhận';
 
-    if (status == 'Da xac nhan') {
+    final s = status.trim().toLowerCase();
+    if (s == 'da xac nhan' || s == 'đã xác nhận') {
       bg = const Color(0xFFD1FAE5);
       text = const Color(0xFF059669);
       label = 'Đã nhận đoàn';
-    } else if (status == 'Tu choi') {
+    } else if (s == 'dang dan tour' || s == 'đang dẫn tour') {
+      bg = const Color(0xFFDBEAFE);
+      text = const Color(0xFF1D4ED8);
+      label = 'Đang dẫn tour';
+    } else if (s == 'hoan thanh' || s == 'hoàn thành') {
+      bg = const Color(0xFFF1F5F9);
+      text = const Color(0xFF475569);
+      label = 'Đã hoàn thành';
+    } else if (s == 'tu choi' || s == 'từ chối') {
       bg = const Color(0xFFFEE2E2);
       text = const Color(0xFFDC2626);
       label = 'Đã từ chối';

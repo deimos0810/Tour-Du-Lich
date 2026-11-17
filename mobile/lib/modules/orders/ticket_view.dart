@@ -1138,26 +1138,12 @@ class TicketView extends GetView<TicketController> {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogCtx).pop(),
-            child: const Text('Đóng'),
-          ),
-          FilledButton.icon(
+          FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFF0F172A),
             ),
-            onPressed: () async {
-              Navigator.of(dialogCtx).pop();
-              await app.switchToAccount('hdv.nam@viettour.vn');
-            },
-            icon: const Icon(Icons.swap_horiz_rounded, size: 16),
-            label: Text(
-              'Chuyển sang TK HDV để quét ngay',
-              style: TextStyle(
-                fontSize: Responsive.font(9.8),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: const Text('Đã hiểu'),
           ),
         ],
       ),

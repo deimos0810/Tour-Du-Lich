@@ -237,7 +237,7 @@ class GuideScheduleItemModel {
       scheduleId: (json['LichID'] as num?)?.toInt() ?? 0,
       guideId: (json['HDVID'] as num?)?.toInt() ?? 0,
       role: (json['VaiTro'] as String?) ?? 'HDV Chính',
-      status: (json['TrangThai'] as String?) ?? 'Chờ xác nhận',
+      status: (json['TrangThai'] as String?) ?? 'Cho xac nhan',
       note: json['GhiChu'] as String?,
       assignedDate: DateTime.tryParse(json['NgayPhanCong']?.toString() ?? ''),
       tourId: (tour['TourID'] as num?)?.toInt() ?? 0,
@@ -258,6 +258,18 @@ class GuideScheduleItemModel {
     );
   }
 
-  bool get isConfirmed => status == 'Da xac nhan';
-  bool get isPending => status == 'Cho xac nhan';
+  bool get isConfirmed {
+    final s = status.trim().toLowerCase();
+    return s == 'da xac nhan' ||
+        s == 'đã xác nhận' ||
+        s == 'dang dan tour' ||
+        s == 'đang dẫn tour' ||
+        s == 'hoan thanh' ||
+        s == 'hoàn thành';
+  }
+
+  bool get isPending {
+    final s = status.trim().toLowerCase();
+    return s == 'cho xac nhan' || s == 'chờ xác nhận';
+  }
 }
