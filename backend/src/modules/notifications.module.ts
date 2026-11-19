@@ -75,13 +75,13 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     (
       process.env.FRONTEND_URL ||
       process.env.CORS_ORIGIN ||
-      (process.env.NODE_ENV === 'production' ? 'https://viettour-frontend.onrender.com' : 'http://localhost:3000')
+      (process.env.NODE_ENV === 'production' ? 'https://viettour-frontend-upec.onrender.com' : 'http://localhost:3000')
     ).replace(/\/$/, '');
   private api = () =>
     (
       process.env.API_PUBLIC_URL ||
       (process.env.NODE_ENV === 'production'
-        ? 'https://viettour-backend.onrender.com/api'
+        ? 'https://viettour-backend-va4v.onrender.com/api'
         : `http://localhost:${process.env.PORT || 4000}/api`)
     ).replace(/\/$/, '');
   unsubscribeUrl = (token: string) => `${this.api()}/portal/newsletter/unsubscribe?token=${token}`;

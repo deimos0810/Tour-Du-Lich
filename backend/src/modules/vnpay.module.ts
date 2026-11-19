@@ -40,7 +40,7 @@ export class VNPayService {
     let vnpUrl = process.env.VNP_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
     const defaultFrontendReturn =
       process.env.NODE_ENV === 'production'
-        ? 'https://viettour-frontend.onrender.com/portal/my-bookings'
+        ? 'https://viettour-frontend-upec.onrender.com/portal/my-bookings'
         : 'http://localhost:3000/portal/my-bookings';
     const returnUrl = dto.returnUrl || process.env.VNP_RETURNURL || defaultFrontendReturn;
 

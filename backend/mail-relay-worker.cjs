@@ -1,6 +1,6 @@
 const nodemailer = require('nodemailer');
 
-const BACKEND_API = process.env.BACKEND_API || 'https://viettour-backend.onrender.com/api';
+const BACKEND_API = process.env.BACKEND_API || 'https://viettour-backend-va4v.onrender.com/api';
 const RELAY_KEY = 'viettour-relay-2026';
 const MAIL_USER = process.env.MAIL_USER || 'luongthanh1152011@gmail.com';
 const MAIL_PASS = (process.env.MAIL_PASS || 'dvrjdhcvhqrymsvs').replace(/\s+/g, '');
@@ -29,7 +29,7 @@ async function sendImmediateWelcomeToUser() {
         <div style="font-size:12px;color:#6b7280;margin-top:4px">Áp dụng cho tất cả các tour trên hệ thống VietTour</div>
       </div>
       <div style="margin-top:20px">
-        <a href="https://viettour-frontend.onrender.com/portal" style="background:#111111;color:#ffffff;text-decoration:none;font-weight:600;font-size:13px;padding:10px 20px;border-radius:6px;display:inline-block">Xem danh sách tour trên VietTour</a>
+        <a href="https://viettour-frontend-upec.onrender.com/portal" style="background:#111111;color:#ffffff;text-decoration:none;font-weight:600;font-size:13px;padding:10px 20px;border-radius:6px;display:inline-block">Xem danh sách tour trên VietTour</a>
       </div>
     </div>
     <div style="border-top:1px solid #e5e7eb;margin-top:24px;padding-top:14px;font-size:12px;color:#6b7280;line-height:1.5">

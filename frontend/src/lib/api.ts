@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 const DEFAULT_API_URL =
   process.env.NODE_ENV === 'production'
-    ? 'https://viettour-backend.onrender.com/api'
+    ? 'https://viettour-backend-va4v.onrender.com/api'
     : 'http://localhost:4000/api';
 
 export function getApiUrl(): string {
@@ -107,7 +107,7 @@ export function getImageUrl(url: string | null | undefined): string {
     return trimmed;
   }
   if (trimmed.startsWith('/')) {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === 'production' ? 'https://viettour-backend.onrender.com/api' : '');
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === 'production' ? 'https://viettour-backend-va4v.onrender.com/api' : '');
     if (apiBase) {
       const origin = apiBase.replace(/\/api\/?$/, '');
       return `${origin}${trimmed}`;

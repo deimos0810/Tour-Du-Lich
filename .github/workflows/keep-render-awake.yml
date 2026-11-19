@@ -17,11 +17,11 @@ jobs:
       - name: Ping VietTour Backend Healthcheck
         run: |
           echo "Pinging Backend..."
-          curl -fsSL --retry 3 --retry-delay 5 --max-time 60 https://viettour-backend.onrender.com/api/health || true
+          curl -fsSL --retry 3 --retry-delay 5 --max-time 60 https://viettour-backend-va4v.onrender.com/api/health || true
       - name: Ping VietTour Frontend Healthcheck
         run: |
           echo "Pinging Frontend..."
-          curl -fsSL --retry 3 --retry-delay 5 --max-time 60 https://viettour-frontend.onrender.com/api/health || true
+          curl -fsSL --retry 3 --retry-delay 5 --max-time 60 https://viettour-frontend-upec.onrender.com/api/health || true
       - name: Flush Pending Render Emails via Gmail SMTP
         working-directory: backend
         run: |

@@ -34,7 +34,7 @@ export class ZaloPayService {
     const frontendOrigin =
       process.env.FRONTEND_URL ||
       (process.env.NODE_ENV === 'production'
-        ? 'https://viettour-frontend.onrender.com'
+        ? 'https://viettour-frontend-upec.onrender.com'
         : 'http://localhost:3000');
     const gatewayUrl = `${frontendOrigin.replace(/\/+$/, '')}/portal/sandbox-pay/${don.MaDon}?method=ZaloPay&appTransId=${appTransId}&amount=${amount}&mac=${mac}`;
 

@@ -127,7 +127,7 @@ export class UploadController {
 
     const relativeUrl = `/uploads/tours/${file.filename}`;
     const backendOrigin =
-      process.env.NODE_ENV === 'production' ? 'https://viettour-backend.onrender.com' : 'http://localhost:4000';
+      process.env.NODE_ENV === 'production' ? 'https://viettour-backend-va4v.onrender.com' : 'http://localhost:4000';
     const fullUrl = `${backendOrigin}${relativeUrl}`;
 
     return {

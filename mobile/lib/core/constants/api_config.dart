@@ -10,7 +10,7 @@ abstract final class ApiConfig {
     if (configured.isNotEmpty) {
       return configured.replaceFirst(RegExp(r'/+$'), '');
     }
-    return 'https://viettour-backend.onrender.com/api';
+    return 'https://viettour-backend-va4v.onrender.com/api';
   }
 
   static String get tours => '$baseUrl/tours';

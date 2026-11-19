@@ -47,8 +47,8 @@ async function bootstrap() {
 
   // Tự động Keep-Alive trên môi trường Production (Render) mỗi 10 phút
   if (process.env.NODE_ENV === 'production' || process.env.RENDER) {
-    const backendHealthUrl = `${process.env.RENDER_EXTERNAL_URL || 'https://viettour-backend.onrender.com'}/api/health`;
-    const frontendHealthUrl = `${process.env.FRONTEND_URL || 'https://viettour-frontend.onrender.com'}/api/health`;
+    const backendHealthUrl = `${process.env.RENDER_EXTERNAL_URL || 'https://viettour-backend-va4v.onrender.com'}/api/health`;
+    const frontendHealthUrl = `${process.env.FRONTEND_URL || 'https://viettour-frontend-upec.onrender.com'}/api/health`;
     const PING_INTERVAL_MS = 10 * 60 * 1000; // 10 phút (< ngưỡng 15 phút sleep của Render)
 
     setInterval(async () => {

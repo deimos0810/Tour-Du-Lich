@@ -139,7 +139,7 @@ class TicketView extends GetView<TicketController> {
         if (myIdx < 0) myIdx = 0;
 
         final myPassenger = passengers.isNotEmpty ? passengers[myIdx] : null;
-        const hostForQr = 'https://viettour-frontend.onrender.com';
+        const hostForQr = 'https://viettour-frontend-upec.onrender.com';
         final qrDataUrl = myPassenger != null
             ? '$hostForQr/portal/ticket/$maDon?khach=${myPassenger['ChiTietID']}'
             : '$hostForQr/portal/ticket/$maDon';
