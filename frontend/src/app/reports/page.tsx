@@ -447,8 +447,8 @@ export default function ReportsPage() {
                       sodon: c.sodon,
                       sokhach: c.sokhach,
                       doanhthu: Math.round((c.sokhach || 1) * 6500000),
-                      danhgia_count: 5,
-                      diem_tb: 4.9,
+                      sodanhgia: 5,
+                      diemtb: 4.9,
                     }));
                   }
 
