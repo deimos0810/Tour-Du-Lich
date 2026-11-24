@@ -73,6 +73,7 @@ export default function CustomerHeader() {
   // Thông báo đơn đặt tour & lịch trình
   const [notices, setNotices] = useState<PortalNotification[]>([]);
   const [noticesOpen, setNoticesOpen] = useState(false);
+  const [hasViewedNotices, setHasViewedNotices] = useState(false);
   const noticesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -83,6 +84,11 @@ export default function CustomerHeader() {
       })
       .catch(() => {});
   }, [user]);
+
+  const handleToggleNotices = () => {
+    setNoticesOpen((prev) => !prev);
+    setHasViewedNotices(true);
+  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -305,7 +311,7 @@ export default function CustomerHeader() {
               <div style={{ position: 'relative' }} ref={noticesRef}>
                 <button
                   type="button"
-                  onClick={() => setNoticesOpen(!noticesOpen)}
+                  onClick={handleToggleNotices}
                   title="Thông báo đơn đặt tour"
                   style={{
                     position: 'relative',
@@ -318,12 +324,12 @@ export default function CustomerHeader() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    color: notices.length > 0 ? '#e11d48' : '#64748b',
+                    color: !hasViewedNotices && notices.length > 0 ? '#e11d48' : '#64748b',
                     transition: 'all 0.15s ease',
                   }}
                 >
                   <Bell size={16} strokeWidth={1.8} />
-                  {notices.length > 0 && (
+                  {!hasViewedNotices && notices.length > 0 && (
                     <span
                       style={{
                         position: 'absolute',
@@ -354,7 +360,8 @@ export default function CustomerHeader() {
                       position: 'absolute',
                       top: 'calc(100% + 8px)',
                       right: 0,
-                      width: '320px',
+                      width: '350px',
+                      maxWidth: 'calc(100vw - 24px)',
                       background: '#ffffff',
                       borderRadius: '12px',
                       border: '1px solid var(--border)',
@@ -397,35 +404,62 @@ export default function CustomerHeader() {
                           const bg = isCancel ? '#fff1f2' : isSchedule ? '#f0fdf4' : isPayment ? '#fffbeb' : '#f5f3ff';
                           const border = isCancel ? '#fecdd3' : isSchedule ? '#bbf7d0' : isPayment ? '#fde68a' : '#ddd6fe';
                           const badgeColor = isCancel ? '#e11d48' : isSchedule ? '#15803d' : isPayment ? '#b45309' : '#6d28d9';
+                          const displayTitle = n.tieuDe.replace(/—\s*Đơn.*$/i, '').trim();
 
                           return (
                             <Link
                               key={`${n.donHangId}-${n.loai}-${idx}`}
-                              href="/portal/my-bookings"
+                              href={n.maDon ? `/portal/ticket/${n.maDon}` : '/portal/my-bookings'}
                               onClick={() => setNoticesOpen(false)}
+                              title={n.noiDung}
                               style={{
                                 textDecoration: 'none',
                                 display: 'block',
                                 background: bg,
                                 border: `1px solid ${border}`,
                                 borderRadius: '8px',
-                                padding: '9px 11px',
+                                padding: '9px 12px',
                                 transition: 'all 0.15s ease',
                               }}
                             >
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
-                                <span style={{ fontSize: '11.5px', fontWeight: 700, color: badgeColor, display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                  {isCancel && <AlertTriangle size={13} />}
-                                  {isSchedule && <Calendar size={13} />}
-                                  {isPayment && <CreditCard size={13} />}
-                                  {isReview && <Star size={13} />}
-                                  {n.tieuDe}
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '3px' }}>
+                                <span
+                                  style={{
+                                    fontSize: '11.5px',
+                                    fontWeight: 700,
+                                    color: badgeColor,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    flex: 1,
+                                  }}
+                                >
+                                  {isCancel && <AlertTriangle size={13} style={{ flexShrink: 0 }} />}
+                                  {isSchedule && <Calendar size={13} style={{ flexShrink: 0 }} />}
+                                  {isPayment && <CreditCard size={13} style={{ flexShrink: 0 }} />}
+                                  {isReview && <Star size={13} style={{ flexShrink: 0 }} />}
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {displayTitle}
+                                  </span>
                                 </span>
-                                <span style={{ fontSize: '10.5px', color: '#64748B', fontWeight: 600 }}>
+                                <span style={{ fontSize: '10.5px', color: '#64748B', fontWeight: 600, flexShrink: 0 }}>
                                   #{n.maDon}
                                 </span>
                               </div>
-                              <div style={{ fontSize: '12px', color: '#334155', lineHeight: 1.4 }}>
+                              <div
+                                style={{
+                                  fontSize: '12px',
+                                  color: '#334155',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  display: 'block',
+                                  lineHeight: 1.4,
+                                }}
+                              >
                                 {n.noiDung}
                               </div>
                             </Link>
