@@ -1,5 +1,6 @@
 'use client';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { api, getImageUrl, uploadTourImage, useApi } from '@/lib/api';
 import { ApiNotice, EmptyRow, Status, vnd, uiAlert, uiConfirm } from '@/lib/ui';
 import { useAuth } from '@/context/AuthContext';
@@ -147,6 +148,14 @@ const INITIAL_FORM = {
 
 export default function ToursPage() {
   const { user } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (user && (user.primaryRole === 'Khach hang' || user.roles?.includes('Khach hang')) && user.primaryRole !== 'Admin') {
+      router.replace('/portal');
+    }
+  }, [user, router]);
+
   const [search, setSearch] = useState('');
   const [danhMucId, setDanhMucId] = useState('');
   const [trangThai, setTrangThai] = useState('');
@@ -477,6 +486,18 @@ export default function ToursPage() {
       uiAlert(err?.message || 'Không thể xóa tour này.', { type: 'error', title: 'Không thể xóa Tour' });
     }
   };
+
+  if (user && (user.primaryRole === 'Khach hang' || user.roles?.includes('Khach hang')) && user.primaryRole !== 'Admin') {
+    return (
+      <div style={{ padding: '80px 20px', textAlign: 'center' }}>
+        <h2 style={{ color: '#DC2626', fontWeight: 900, fontSize: '24px' }}>403 — Không có quyền truy cập</h2>
+        <p style={{ color: '#64748B', marginTop: '10px' }}>Tài khoản khách hàng không được phép truy cập vào trang Quản lý Tour du lịch nội bộ.</p>
+        <button className="btn btn-primary" onClick={() => router.replace('/portal')} style={{ marginTop: '16px' }}>
+          Quay lại Cổng Khách hàng
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>

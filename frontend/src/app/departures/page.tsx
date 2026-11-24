@@ -41,7 +41,7 @@ export default function DeparturesPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (user && user.primaryRole === 'Khach hang') {
+    if (user && (user.primaryRole === 'Khach hang' || user.roles?.includes('Khach hang')) && user.primaryRole !== 'Admin') {
       router.replace('/portal');
     }
   }, [user, router]);
@@ -49,7 +49,7 @@ export default function DeparturesPage() {
   const { data, error, loading, reload } = useApi<Departure[]>('/departures');
   const toursApi = useApi<TourSimple[]>('/tours');
 
-  if (user && user.primaryRole === 'Khach hang') {
+  if (user && (user.primaryRole === 'Khach hang' || user.roles?.includes('Khach hang')) && user.primaryRole !== 'Admin') {
     return (
       <div style={{ padding: '80px 20px', textAlign: 'center' }}>
         <h2 style={{ color: '#DC2626', fontWeight: 900, fontSize: '24px' }}>403 — Không có quyền truy cập</h2>

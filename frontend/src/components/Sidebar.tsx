@@ -42,11 +42,12 @@ export default function Sidebar() {
       return ['/my-schedule', '/departures', '/guides'].includes(href);
     }
 
-    if (primaryRole === 'Khach hang') {
+    const isKhachHang = primaryRole === 'Khach hang' || user?.roles?.includes('Khach hang');
+    if (isKhachHang && primaryRole !== 'Admin') {
       return ['/portal', '/portal/my-bookings'].includes(href);
     }
 
-    return true;
+    return false;
   };
 
   const NAV = [

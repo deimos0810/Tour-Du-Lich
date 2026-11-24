@@ -22,6 +22,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       } else if (!isAuthPage && !isPortalPage && !user) {
         // Chưa đăng nhập mà vào trang Quản trị -> Chuyển về /login
         router.push('/login');
+      } else if (!isAuthPage && !isPortalPage && user?.primaryRole === 'Khach hang') {
+        // Khách hàng không được truy cập các trang nội bộ -> chuyển về Portal
+        router.replace('/portal');
       }
     }
   }, [isLoading, isAuthPage, isPortalPage, user, router]);
@@ -69,6 +72,44 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         fontWeight: 500
       }}>
         Đang kiểm tra phiên làm việc...
+      </div>
+    );
+  }
+
+  // Nếu là khách hàng đang ở trang Admin nội bộ -> chặn render và chuyển hướng
+  if (!isPortalPage && !isAuthPage && user?.primaryRole === 'Khach hang') {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        width: '100vw',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#F8FAFC',
+        padding: '20px',
+        textAlign: 'center',
+      }}>
+        <h2 style={{ color: '#DC2626', fontWeight: 900, fontSize: '24px', marginBottom: '8px' }}>
+          403 — Không có quyền truy cập
+        </h2>
+        <p style={{ color: '#64748B', maxWidth: '480px', marginBottom: '16px', fontSize: '14px' }}>
+          Tài khoản Khách hàng không có quyền truy cập vào phân hệ Quản trị Lữ hành nội bộ (ERP).
+        </p>
+        <button
+          onClick={() => router.replace('/portal')}
+          style={{
+            background: '#0F172A',
+            color: '#FFFFFF',
+            padding: '10px 20px',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: 600,
+          }}
+        >
+          Quay lại Cổng Khách hàng
+        </button>
       </div>
     );
   }
