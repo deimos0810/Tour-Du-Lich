@@ -654,7 +654,8 @@ export default function BookingsPage() {
                       className="input"
                       required
                       min={1000}
-                      max={Math.round(remaining)}
+                      max={remaining > 0 ? Math.round(remaining) : undefined}
+                      disabled={remaining <= 0}
                       value={collectAmount}
                       onChange={(e) => {
                         setCollectAmount(e.target.value);
@@ -665,7 +666,8 @@ export default function BookingsPage() {
                         fontSize: '15px',
                         fontWeight: 800,
                         padding: '10px 12px',
-                        color: '#0F172A',
+                        color: remaining <= 0 ? '#94A3B8' : '#0F172A',
+                        background: remaining <= 0 ? '#F1F5F9' : undefined,
                       }}
                     />
                     <div style={{ fontSize: '11.5px', color: '#64748B', marginTop: '4px' }}>
@@ -730,15 +732,16 @@ export default function BookingsPage() {
                   <button
                     type="submit"
                     className="btn btn-primary"
-                    disabled={submittingCollect}
+                    disabled={submittingCollect || remaining <= 0}
                     style={{
-                      background: '#0F172A',
-                      borderColor: '#0F172A',
+                      background: remaining <= 0 ? '#94A3B8' : '#0F172A',
+                      borderColor: remaining <= 0 ? '#94A3B8' : '#0F172A',
                       fontWeight: 700,
                       padding: '8px 18px',
+                      cursor: remaining <= 0 ? 'not-allowed' : 'pointer',
                     }}
                   >
-                    {submittingCollect ? 'Đang ghi nhận...' : 'Xác nhận đã thu tiền & Cập nhật trạng thái'}
+                    {submittingCollect ? 'Đang ghi nhận...' : remaining <= 0 ? 'Đã thanh toán đầy đủ' : 'Xác nhận đã thu tiền & Cập nhật trạng thái'}
                   </button>
                 </div>
               </form>

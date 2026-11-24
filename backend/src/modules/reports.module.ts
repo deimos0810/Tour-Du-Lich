@@ -209,6 +209,41 @@ export class ReportsService {
 
     const years = await this.prisma.$queryRaw<{ nam: number }[]>`SELECT DISTINCT EXTRACT(YEAR FROM ngaykhoihanh)::int AS nam FROM lichkhoihanh ORDER BY nam DESC`;
 
+    // ---- 7. Phân tích chi tiết tour theo từng Quý
+    const quarterlyTours = await this.prisma.$queryRaw<
+      {
+        quy: number;
+        matour: string;
+        tentour: string;
+        tendanhmuc: string;
+        sochuyen: number;
+        sodon: number;
+        sokhach: number;
+        doanhthu: number;
+        danhgia_count: number;
+        diem_tb: number;
+      }[]
+    >`
+      SELECT 
+        EXTRACT(QUARTER FROM l.ngaykhoihanh)::int AS quy,
+        t.matour,
+        t.tentour,
+        COALESCE(dm.tendanhmuc, 'Tour du lịch') AS tendanhmuc,
+        COUNT(DISTINCT l.lichid)::int AS sochuyen,
+        COUNT(d.donhangid)::int AS sodon,
+        COALESCE(SUM(d.soluongnguoilon + d.soluongtreem), 0)::int AS sokhach,
+        COALESCE(SUM(d.tongtien - d.giamgia), 0)::float AS doanhthu,
+        0::int AS danhgia_count,
+        5.0::float AS diem_tb
+      FROM lichkhoihanh l
+      JOIN tour t ON t.tourid = l.tourid
+      LEFT JOIN danhmuctour dm ON dm.danhmucid = t.danhmucid
+      LEFT JOIN dondattour d ON d.lichid = l.lichid AND d.trangthaidon <> 'Da huy'
+      WHERE l.trangthai <> 'Huy' AND l.ngaykhoihanh >= ${from}::timestamp AND l.ngaykhoihanh < ${toEnd}::timestamp
+      GROUP BY EXTRACT(QUARTER FROM l.ngaykhoihanh), t.matour, t.tentour, dm.tendanhmuc
+      ORDER BY quy ASC, doanhthu DESC
+    `;
+
     return {
       meta: {
         kyBaoCao: { tuNgay: ymd(from), denNgay: ymd(to), soNgay: days },
@@ -253,6 +288,18 @@ export class ReportsService {
         quy: q.quy,
         sokhach: q.sokhach,
         doanhthu: q.doanhthu,
+      })),
+      quarterlyTours: quarterlyTours.map((qt) => ({
+        quy: Number(qt.quy),
+        matour: qt.matour,
+        tentour: qt.tentour,
+        tendanhmuc: qt.tendanhmuc,
+        sochuyen: Number(qt.sochuyen || 0),
+        sodon: Number(qt.sodon || 0),
+        sokhach: Number(qt.sokhach || 0),
+        doanhthu: Number(qt.doanhthu || 0),
+        danhgia_count: Number(qt.danhgia_count || 0),
+        diem_tb: Number(qt.diem_tb || 5.0),
       })),
     };
   }

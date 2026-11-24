@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Icon from '@/components/Icon';
 import { api, useApi } from '@/lib/api';
 import { ApiNotice, EmptyRow, Status, date, vnd, uiAlert, uiConfirm } from '@/lib/ui';
@@ -37,8 +38,28 @@ type TourSimple = { TourID: number; MaTour: string; TenTour: string; GiaNguoiLon
 
 export default function DeparturesPage() {
   const { user } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (user && user.primaryRole === 'Khach hang') {
+      router.replace('/portal');
+    }
+  }, [user, router]);
+
   const { data, error, loading, reload } = useApi<Departure[]>('/departures');
   const toursApi = useApi<TourSimple[]>('/tours');
+
+  if (user && user.primaryRole === 'Khach hang') {
+    return (
+      <div style={{ padding: '80px 20px', textAlign: 'center' }}>
+        <h2 style={{ color: '#DC2626', fontWeight: 900, fontSize: '24px' }}>403 — Không có quyền truy cập</h2>
+        <p style={{ color: '#64748B', marginTop: '10px' }}>Tài khoản khách hàng không được phép truy cập vào trang Quản lý Lịch khởi hành nội bộ.</p>
+        <button className="btn btn-primary" onClick={() => router.replace('/portal')} style={{ marginTop: '16px' }}>
+          Quay lại Cổng Khách hàng
+        </button>
+      </div>
+    );
+  }
 
   // Modal mở đợt khởi hành mới
   const [showCreateModal, setShowCreateModal] = useState(false);

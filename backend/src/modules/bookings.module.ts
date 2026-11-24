@@ -566,6 +566,10 @@ export class BookingsService {
     if (don.TrangThaiDon === 'Da huy' || don.TrangThaiDon === 'Cho thanh toan') {
       throw new BadRequestException('Chỉ được đánh giá các tour đã thanh toán hoặc đã hoàn thành');
     }
+    // Kiểm tra chuyến đi đã kết thúc chưa
+    if (don.LichKhoiHanh && don.LichKhoiHanh.NgayKetThuc > new Date()) {
+      throw new BadRequestException('Chuyến đi chưa kết thúc, quý khách vui lòng đánh giá sau khi hoàn thành tour');
+    }
     const existing = await this.prisma.danhGia.findUnique({
       where: { KhachHangID_DonHangID: { KhachHangID: don.KhachHangID, DonHangID: don.DonHangID } },
     });
