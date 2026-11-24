@@ -6,7 +6,16 @@ import { api } from '@/lib/api';
 import CustomerAccountDropdown from './CustomerAccountDropdown';
 import LogoutModal from './LogoutModal';
 import CancellationNoticeModal, { CancellationNotice } from './CancellationNoticeModal';
-import { QrCode, LayoutDashboard, ChevronDown, Phone, Mail, Clock, Bell, AlertTriangle } from 'lucide-react';
+import { QrCode, LayoutDashboard, ChevronDown, Phone, Mail, Clock, Bell, AlertTriangle, Calendar, CreditCard, Star } from 'lucide-react';
+
+export type PortalNotification = {
+  loai: 'NHAC_LICH' | 'THANH_TOAN' | 'HUY_DON' | 'DANH_GIA' | 'DA_DANH_GIA';
+  tieuDe: string;
+  noiDung: string;
+  maDon: string;
+  donHangId: number;
+  thoiGian: string;
+};
 
 export default function CustomerHeader() {
   const { user, logout } = useAuth();
@@ -61,14 +70,14 @@ export default function CustomerHeader() {
     }
   };
 
-  // Thông báo hủy đơn
-  const [notices, setNotices] = useState<CancellationNotice[]>([]);
+  // Thông báo đơn đặt tour & lịch trình
+  const [notices, setNotices] = useState<PortalNotification[]>([]);
   const [noticesOpen, setNoticesOpen] = useState(false);
   const noticesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!user || !user.customerId) return;
-    api<CancellationNotice[]>(`/portal/cancellation-notices?customerId=${user.customerId}`)
+    api<PortalNotification[]>(`/portal/notifications?customerId=${user.customerId}`)
       .then((data) => {
         if (Array.isArray(data)) setNotices(data);
       })
@@ -378,33 +387,50 @@ export default function CustomerHeader() {
                     </div>
 
                     {notices.length > 0 ? (
-                      <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {notices.map((n) => (
-                          <Link
-                            key={n.donHangId}
-                            href="/portal/my-bookings"
-                            onClick={() => setNoticesOpen(false)}
-                            style={{
-                              textDecoration: 'none',
-                              display: 'block',
-                              background: '#fff1f2',
-                              border: '1px solid #fecdd3',
-                              borderRadius: '8px',
-                              padding: '10px 12px',
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#e11d48', fontSize: '12px', fontWeight: 700 }}>
-                              <AlertTriangle size={13} />
-                              <span>Đơn #{n.maDon} đã bị hủy</span>
-                            </div>
-                            <div style={{ fontSize: '12px', color: '#0f172a', fontWeight: 600, marginTop: '3px' }}>
-                              {n.tenTour}
-                            </div>
-                            <div style={{ fontSize: '11.5px', color: '#881337', marginTop: '4px', background: '#ffffff', padding: '6px 8px', borderRadius: '6px' }}>
-                              <strong>Lý do: </strong>{n.lyDoHuy}
-                            </div>
-                          </Link>
-                        ))}
+                      <div style={{ maxHeight: '320px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {notices.map((n, idx) => {
+                          const isCancel = n.loai === 'HUY_DON';
+                          const isSchedule = n.loai === 'NHAC_LICH';
+                          const isPayment = n.loai === 'THANH_TOAN';
+                          const isReview = n.loai === 'DANH_GIA';
+
+                          const bg = isCancel ? '#fff1f2' : isSchedule ? '#f0fdf4' : isPayment ? '#fffbeb' : '#f5f3ff';
+                          const border = isCancel ? '#fecdd3' : isSchedule ? '#bbf7d0' : isPayment ? '#fde68a' : '#ddd6fe';
+                          const badgeColor = isCancel ? '#e11d48' : isSchedule ? '#15803d' : isPayment ? '#b45309' : '#6d28d9';
+
+                          return (
+                            <Link
+                              key={`${n.donHangId}-${n.loai}-${idx}`}
+                              href="/portal/my-bookings"
+                              onClick={() => setNoticesOpen(false)}
+                              style={{
+                                textDecoration: 'none',
+                                display: 'block',
+                                background: bg,
+                                border: `1px solid ${border}`,
+                                borderRadius: '8px',
+                                padding: '9px 11px',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
+                                <span style={{ fontSize: '11.5px', fontWeight: 700, color: badgeColor, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                  {isCancel && <AlertTriangle size={13} />}
+                                  {isSchedule && <Calendar size={13} />}
+                                  {isPayment && <CreditCard size={13} />}
+                                  {isReview && <Star size={13} />}
+                                  {n.tieuDe}
+                                </span>
+                                <span style={{ fontSize: '10.5px', color: '#64748B', fontWeight: 600 }}>
+                                  #{n.maDon}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#334155', lineHeight: 1.4 }}>
+                                {n.noiDung}
+                              </div>
+                            </Link>
+                          );
+                        })}
                       </div>
                     ) : (
                       <div style={{ padding: '16px 0', textAlign: 'center', color: '#94a3b8', fontSize: '12.5px' }}>
